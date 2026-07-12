@@ -1,26 +1,291 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-display: var(--font-display);
+  --font-heading: var(--font-display);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-soft-foreground: var(--primary-soft-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-ink: var(--foreground);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+:root {
+  /* Surfaces */
+  --background: #f7faf9;
+  --foreground: #0e2a3b;
+  --card: #ffffff;
+  --card-foreground: #0e2a3b;
+  --popover: #ffffff;
+  --popover-foreground: #0e2a3b;
+
+  /* Brand */
+  --primary: #3bc1a8;
+  --primary-foreground: #0e2a3b;
+  --primary-soft: #e6f7f3;
+  --primary-soft-foreground: #0e2a3b;
+
+  /* Structural */
+  --secondary: #eaf2f0;
+  --secondary-foreground: #0e2a3b;
+  --muted: #eef2f1;
+  --muted-foreground: #5c6f76;
+  --accent: #e6f7f3;
+  --accent-foreground: #0e2a3b;
+
+  /* Status — darkened from the original #ef4444/#16a34a so white text and
+     the soft "/10" badge-text pairing both clear WCAG AA (4.5:1); the
+     original shades only reached ~3.3–3.8:1 against white. */
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --success: #15803d;
+  --success-foreground: #ffffff;
+  --warning: #f59e0b;
+  --warning-foreground: #0e2a3b;
+
+  --border: #dde7e4;
+  --input: #dde7e4;
+  --ring: #3bc1a8;
+
+  --chart-1: #3bc1a8;
+  --chart-2: #0f2a3f;
+  --chart-3: #f59e0b;
+  --chart-4: #16a34a;
+  --chart-5: #ef4444;
+
+  --radius: 0.75rem;
+
+  /* Sidebar — distinct navy surface for premium IoT feel */
+  --sidebar: #0f2a3f;
+  --sidebar-foreground: #e7f1ef;
+  --sidebar-primary: #3bc1a8;
+  --sidebar-primary-foreground: #0e2a3b;
+  --sidebar-accent: #15394f;
+  --sidebar-accent-foreground: #e7f1ef;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-ring: #3bc1a8;
+
+  --shadow-color: 200 35% 20%;
+}
+
+.dark {
+  --background: #0b1a24;
+  --foreground: #eaf3f1;
+  --card: #112430;
+  --card-foreground: #eaf3f1;
+  --popover: #122733;
+  --popover-foreground: #eaf3f1;
+
+  --primary: #34ae98;
+  --primary-foreground: #06150f;
+  --primary-soft: #123a33;
+  --primary-soft-foreground: #eaf3f1;
+
+  --secondary: #152a35;
+  --secondary-foreground: #eaf3f1;
+  --muted: #16262f;
+  --muted-foreground: #8fa3a8;
+  --accent: #123a33;
+  --accent-foreground: #eaf3f1;
+
+  --destructive: #f87171;
+  --destructive-foreground: #2a0b0b;
+  --success: #22c55e;
+  --success-foreground: #062611;
+  --warning: #fbbf24;
+  --warning-foreground: #2b1b02;
+
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.12);
+  --ring: #34ae98;
+
+  --chart-1: #34ae98;
+  --chart-2: #7fd9c8;
+  --chart-3: #fbbf24;
+  --chart-4: #22c55e;
+  --chart-5: #f87171;
+
+  --sidebar: #0e2029;
+  --sidebar-foreground: #eaf3f1;
+  --sidebar-primary: #34ae98;
+  --sidebar-primary-foreground: #06150f;
+  --sidebar-accent: #16303d;
+  --sidebar-accent-foreground: #eaf3f1;
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+  --sidebar-ring: #34ae98;
+
+  --shadow-color: 200 70% 2%;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer utilities {
+  /* Soft, layered elevation — replaces flat default shadows. Cards lift
+     gently on hover so the whole app shares one consistent "tactile" feel. */
+  .shadow-soft {
+    box-shadow:
+      0 1px 2px hsl(var(--shadow-color) / 0.06),
+      0 4px 10px hsl(var(--shadow-color) / 0.06),
+      0 16px 32px -12px hsl(var(--shadow-color) / 0.1);
+    transition:
+      box-shadow 200ms ease,
+      transform 200ms ease;
+  }
+  .shadow-soft-lg {
+    box-shadow:
+      0 2px 4px hsl(var(--shadow-color) / 0.08),
+      0 12px 24px hsl(var(--shadow-color) / 0.1),
+      0 32px 64px -16px hsl(var(--shadow-color) / 0.16);
+    transition:
+      box-shadow 200ms ease,
+      transform 200ms ease;
+  }
+  @media (hover: hover) {
+    .hover-lift:hover {
+      transform: translateY(-2px);
+      box-shadow:
+        0 2px 4px hsl(var(--shadow-color) / 0.08),
+        0 12px 24px hsl(var(--shadow-color) / 0.1),
+        0 32px 64px -16px hsl(var(--shadow-color) / 0.16);
+    }
+  }
+
+  /* Frosted glass surface for floating panels / hero cards */
+  .glass-card {
+    background: color-mix(in oklab, var(--card) 72%, transparent);
+    backdrop-filter: blur(16px) saturate(140%);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+  }
+
+  /* Elegant teal gradient for hero / stat highlight surfaces */
+  .gradient-teal {
+    background: linear-gradient(135deg, #3bc1a8 0%, #2da690 55%, #1f7a68 100%);
+    color: #06150f;
+  }
+  .gradient-teal-soft {
+    background: linear-gradient(
+      135deg,
+      var(--primary-soft) 0%,
+      color-mix(in oklab, var(--primary-soft) 60%, var(--background)) 100%
+    );
+  }
+
+  .font-display {
+    font-family: var(--font-display);
+  }
+
+  /* One-shot ripple flash for the realtime scan visualizer. */
+  @keyframes scan-burst {
+    0% {
+      transform: scale(0.4);
+      opacity: 0.9;
+    }
+    100% {
+      transform: scale(1.8);
+      opacity: 0;
+    }
+  }
+  .animate-scan-burst {
+    animation: scan-burst 700ms ease-out;
+  }
+
+  /* Gentle fade + rise used for page content on route change and for
+     empty states — keeps navigation feeling soft instead of an abrupt cut. */
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .animate-fade-up {
+    animation: fade-up 320ms ease-out both;
+  }
+
+  /* Slow breathing pulse for the fingerprint watermark motif on hero panels. */
+  @keyframes fingerprint-breathe {
+    0%,
+    100% {
+      opacity: 0.08;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.16;
+      transform: scale(1.04);
+    }
+  }
+  .animate-fingerprint-breathe {
+    animation: fingerprint-breathe 4s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-fade-up,
+    .animate-fingerprint-breathe,
+    .shadow-soft,
+    .shadow-soft-lg {
+      animation: none !important;
+      transition: none !important;
+    }
+  }
 }
