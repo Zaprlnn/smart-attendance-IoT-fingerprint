@@ -35,11 +35,12 @@
 
 const char* WIFI_SSID     = "Kuning Telur 4G";
 const char* WIFI_PASSWORD = "KuningTelur2026";
-// Langsung ke Express (port 4000), skip proxy Next.js (port 3000) -- proxy
-// nambah latency/waktu WiFi aktif tiap request, yg kebukti bikin LCD I2C
-// lebih sering corrupt (tegangan drop lebih lama). Rute Express aslinya
-// "/device/..." bukan "/api/..." (itu cuma nama rute proxy-nya Next.js).
-const char* SERVER_URL    = "http://192.168.1.7:4000/device/absensi";
+// Lewat proxy Next.js (port 3000) -- ESP32 cukup 1 port buat semuanya, gak
+// perlu bedain 3000/4000. Backend Express (4000) tetap dipanggil, tapi cuma
+// internal via proxy, gak perlu diakses langsung dari device. Risiko LCD
+// corrupt akibat delay proxy udah dimitigasi lewat lcd.init() re-init tiap
+// nulis (lihat tampilSukses/tampilGagal/lcdMsg).
+const char* SERVER_URL    = "http://192.168.1.7:3000/api/absensi";
 const char* DEVICE_KEY    = "smart-attendance-iot-key"; 
 // =======================================
 
@@ -258,7 +259,7 @@ void laporHasilEnroll(String cmd_id, uint8_t id_jari, bool sukses) {
   if (xSemaphoreTake(httpMutex, portMAX_DELAY)) {
     HTTPClient http;
     String url = String(SERVER_URL);
-    url.replace("device/absensi", "device/command"); // Pakai rute command
+    url.replace("absensi", "device/command"); // Pakai rute command
     http.begin(url);
     http.addHeader("Content-Type", "application/json");
     http.addHeader("x-device-key", DEVICE_KEY);
@@ -405,7 +406,7 @@ void TaskPollServer(void *pvParameters) {
       if (xSemaphoreTake(httpMutex, (TickType_t) 100)) { // Coba ambil selama 100 Ticks
         HTTPClient http;
         String url = String(SERVER_URL);
-        url.replace("device/absensi", "device/command");
+        url.replace("absensi", "device/command");
         
         http.begin(url);
         http.addHeader("x-device-key", DEVICE_KEY);
