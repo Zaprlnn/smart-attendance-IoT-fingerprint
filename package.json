@@ -3,10 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "postinstall": "npm --prefix backend install",
     "dev": "concurrently -n frontend,backend -c blue,green \"npm:dev:frontend\" \"npm:dev:backend\"",
     "dev:frontend": "cross-env NODE_NO_WARNINGS=1 next dev",
-    "dev:backend": "npm --prefix backend run dev",
+    "dev:backend": "cd backend && npm run dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
