@@ -63,19 +63,27 @@ deviceRouter.post("/absensi", requireDeviceKey, async (req, res) => {
 
   const statusValue = typeof status === "string" && status.trim() ? status.trim() : "hadir"
   const deviceKey = (req.headers["x-device-key"] as string) ?? null
+  const namaFallback = typeof nama === "string" && nama.trim() ? nama.trim() : null
 
-  const mhs = await prisma.mahasiswa.findFirst({ where: { id_jari } })
-  const finalNama = mhs?.nama || (typeof nama === "string" && nama.trim()) || `ID Jari #${id_jari}`
-
-  const row = await prisma.absensi.create({
-    data: { id_jari, nama: finalNama, status: statusValue, waktu: new Date() },
-    select: { id: true, waktu: true },
-  })
+  // Lookup mahasiswa + insert absensi digabung jadi 1 round-trip DB (bukan 2
+  // query berurutan) -- tiap round-trip ke Supabase pooler makan ~1.1-1.2s
+  // di jaringan lambat, jadi ini motong latency respons ESP32 hampir setengah.
+  const [row] = await prisma.$queryRaw<
+    { id: bigint; waktu: Date; mahasiswa_id: string | null; mhs_nama: string | null }[]
+  >`
+    WITH mhs AS (
+      SELECT id, nama FROM mahasiswa WHERE id_jari = ${id_jari} LIMIT 1
+    )
+    INSERT INTO absensi (id_jari, nama, status, waktu)
+    SELECT ${id_jari}, COALESCE((SELECT nama FROM mhs), ${namaFallback}, 'ID Jari #' || ${id_jari}::text), ${statusValue}, now()
+    RETURNING id, waktu, (SELECT id FROM mhs) AS mahasiswa_id, (SELECT nama FROM mhs) AS mhs_nama
+  `
+  const finalNama = row.mhs_nama ?? namaFallback ?? `ID Jari #${id_jari}`
 
   // ESP32 cuma butuh nama utk LCD -- jangan bikin dia nunggu bookkeeping
   // (upsert presensi + heartbeat) yang tidak memengaruhi response ini.
   Promise.all([
-    mhs ? upsertPresensiJikaAdaSesiBerjalan(mhs.id, deviceKey) : Promise.resolve(),
+    row.mahasiswa_id ? upsertPresensiJikaAdaSesiBerjalan(row.mahasiswa_id, deviceKey) : Promise.resolve(),
     bumpDeviceHeartbeat(deviceKey, true),
   ]).catch((err) => console.error("[/device/absensi] background bookkeeping gagal:", err))
 
