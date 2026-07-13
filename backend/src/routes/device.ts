@@ -67,14 +67,17 @@ deviceRouter.post("/absensi", requireDeviceKey, async (req, res) => {
   const mhs = await prisma.mahasiswa.findFirst({ where: { id_jari } })
   const finalNama = mhs?.nama || (typeof nama === "string" && nama.trim()) || `ID Jari #${id_jari}`
 
-  const [row] = await Promise.all([
-    prisma.absensi.create({
-      data: { id_jari, nama: finalNama, status: statusValue, waktu: new Date() },
-      select: { id: true, waktu: true },
-    }),
+  const row = await prisma.absensi.create({
+    data: { id_jari, nama: finalNama, status: statusValue, waktu: new Date() },
+    select: { id: true, waktu: true },
+  })
+
+  // ESP32 cuma butuh nama utk LCD -- jangan bikin dia nunggu bookkeeping
+  // (upsert presensi + heartbeat) yang tidak memengaruhi response ini.
+  Promise.all([
     mhs ? upsertPresensiJikaAdaSesiBerjalan(mhs.id, deviceKey) : Promise.resolve(),
     bumpDeviceHeartbeat(deviceKey, true),
-  ])
+  ]).catch((err) => console.error("[/device/absensi] background bookkeeping gagal:", err))
 
   console.log(`[/device/absensi] INSERT OK — id_jari=${id_jari} nama="${finalNama}"`)
   return res.json({
