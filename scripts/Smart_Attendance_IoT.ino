@@ -127,7 +127,14 @@ void beepBlocking(int n) {
 }
 
 // ====== Tampil LCD ======
+// lcd.init() diulang tiap sebelum nulis (bukan cuma sekali pas boot) --
+// transmisi WiFi (HTTP ke server) bisa bikin tegangan drop sesaat dan
+// nge-corrupt state internal chip LCD I2C, biasanya kejadian abis
+// kirimAbsensi()/laporHasilEnroll()/polling command. init() ulang di sini
+// "menyembuhkan" itu sebelum nulis apapun, di titik tunggal yang dipakai
+// semua pemanggil (bukan ditambal di tiap tempat yang habis WiFi call).
 void tampilSukses(String nama) {
+  lcd.init();
   lcd.clear();
   lcd.setCursor(0, 0); lcd.print("  ABSEN SUKSES  ");
   lcd.setCursor(0, 1);
@@ -137,12 +144,14 @@ void tampilSukses(String nama) {
 }
 
 void tampilGagal() {
+  lcd.init();
   lcd.clear();
   lcd.setCursor(0, 0); lcd.print("TIDAK ADA DATA! ");
   lcd.setCursor(0, 1); lcd.print("  Belum Daftar  ");
 }
 
 void lcdMsg(const char* b1, const char* b2 = "                ") {
+  lcd.init();
   lcd.clear();
   lcd.setCursor(0, 0); lcd.print(b1);
   lcd.setCursor(0, 1); lcd.print(b2);
