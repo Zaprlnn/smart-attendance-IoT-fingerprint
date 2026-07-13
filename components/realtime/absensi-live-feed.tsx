@@ -51,7 +51,7 @@ function AbsensiRowItem({ row, isNew }: { row: AbsensiRow; isNew: boolean }) {
       {/* Nama */}
       <div className="min-w-0">
         <p className="truncate font-medium leading-tight">{row.nama}</p>
-        <p className="text-xs text-muted-foreground">ID Jari #{row.id_jari}</p>
+        <p className="text-xs text-muted-foreground">{row.nim ?? `ID Jari #${row.id_jari}`}</p>
       </div>
 
       {/* Status */}

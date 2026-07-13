@@ -8,16 +8,16 @@ export const deviceRouter = Router()
 // perlu nunggu round-trip ke Supabase (jaringan lambat, ~1-1.2s/query). Data
 // mahasiswa cuma berubah pas enroll (jarang), jadi cache ini di-refresh di
 // tempat itu aja, bukan tiap request.
-const fingerCache = new Map<number, { mahasiswaId: string; nama: string }>()
+const fingerCache = new Map<number, { mahasiswaId: string; nama: string; nim: string }>()
 
 export async function loadFingerCache() {
   const rows = await prisma.mahasiswa.findMany({
     where: { id_jari: { not: null } },
-    select: { id: true, id_jari: true, nama: true },
+    select: { id: true, id_jari: true, nama: true, nim: true },
   })
   fingerCache.clear()
   for (const r of rows) {
-    if (r.id_jari != null) fingerCache.set(r.id_jari, { mahasiswaId: r.id, nama: r.nama })
+    if (r.id_jari != null) fingerCache.set(r.id_jari, { mahasiswaId: r.id, nama: r.nama, nim: r.nim })
   }
   console.log(`[fingerCache] dimuat ${fingerCache.size} mahasiswa`)
 }
@@ -107,7 +107,7 @@ deviceRouter.post("/absensi", requireDeviceKey, async (req, res) => {
   res.json({ ok: true, data: { id: 0, waktu }, nama: finalNama })
 
   prisma.absensi
-    .create({ data: { id_jari, nama: finalNama, status: statusValue, waktu } })
+    .create({ data: { id_jari, nama: finalNama, nim: cached?.nim ?? null, status: statusValue, waktu } })
     .then(() => {
       console.log(`[/device/absensi] INSERT OK — id_jari=${id_jari} nama="${finalNama}"`)
       return Promise.all([
@@ -176,7 +176,7 @@ deviceRouter.post("/command", requireDeviceKey, async (req, res) => {
         where: { id: cmdPayload.mahasiswa_id },
         data: { id_jari: payload.id_jari, fingerprint_enrolled: true },
       })
-      fingerCache.set(payload.id_jari, { mahasiswaId: mhs.id, nama: mhs.nama })
+      fingerCache.set(payload.id_jari, { mahasiswaId: mhs.id, nama: mhs.nama, nim: mhs.nim })
     }
 
     return res.json({ ok: true })

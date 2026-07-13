@@ -225,6 +225,8 @@ export interface AbsensiRow {
   id: number
   id_jari: number
   nama: string
+  /** Null kalau id_jari belum terdaftar ke mahasiswa manapun. */
+  nim: string | null
   /** "hadir" atau nilai lain yang dikirim ESP32. */
   status: string
   /** ISO datetime (timestamptz). */

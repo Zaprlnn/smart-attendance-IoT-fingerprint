@@ -13,6 +13,9 @@ model absensi {
   id         BigInt   @id @default(autoincrement())
   id_jari    Int
   nama       String
+  /// Didenormalisasi sama seperti nama -- absensi tidak punya FK ke mahasiswa
+  /// (log mentah device), null kalau id_jari belum/tidak terdaftar.
+  nim        String?
   status     String   @default("hadir")
   waktu      DateTime @default(now()) @db.Timestamptz(6)
   created_at DateTime @default(now()) @db.Timestamptz(6)

@@ -266,10 +266,17 @@ void laporHasilEnroll(String cmd_id, uint8_t id_jari, bool sukses) {
     
     String statusCmd = sukses ? "completed" : "failed";
     String jsonBody = "{\"command_id\":\"" + cmd_id + "\",\"status\":\"" + statusCmd + "\",\"payload\":{\"id_jari\":" + String(id_jari) + "}}";
-    
-    int httpCode = http.POST(jsonBody);
+
+    // Retry -- kalau ini gagal sekali aja, sensor fisik udah kesimpen sidik
+    // jarinya tapi DB gak pernah tau (mismatch permanen sampai di-enroll ulang).
+    int httpCode = -1;
+    for (int attempt = 0; attempt < 3 && httpCode != 200; attempt++) {
+      if (attempt > 0) delay(1000);
+      httpCode = http.POST(jsonBody);
+    }
     http.end();
-    Serial.println("[HTTP] Melaporkan hasil enroll: " + statusCmd);
+    Serial.print("[HTTP] Melaporkan hasil enroll: "); Serial.print(statusCmd);
+    Serial.print(" (kode: "); Serial.print(httpCode); Serial.println(")");
     xSemaphoreGive(httpMutex);
   }
 }

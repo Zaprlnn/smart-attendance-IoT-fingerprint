@@ -67,7 +67,7 @@ export function MonitoringFeedPreview({
               <div className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate font-medium">{row.nama}</span>
                 <span className="truncate text-xs text-muted-foreground">
-                  ID Jari #{row.id_jari}
+                  {row.nim ?? `ID Jari #${row.id_jari}`}
                 </span>
               </div>
               <div className="flex flex-col items-end gap-1">
