@@ -22,6 +22,17 @@ export async function loadFingerCache() {
   console.log(`[fingerCache] dimuat ${fingerCache.size} mahasiswa`)
 }
 
+// AS608 nyimpen sidik jari per slot ID (1-127) -- kalau 2 mahasiswa kepilih id_jari
+// yang sama, template lama ketiban yang baru dan nama di cache ikut ketuker.
+// Cari angka yang belum dipakai siapapun (bukan asal random tanpa cek).
+export function pickUnusedIdJari(): number {
+  for (let attempt = 0; attempt < 127; attempt++) {
+    const candidate = Math.floor(Math.random() * 127) + 1
+    if (!fingerCache.has(candidate)) return candidate
+  }
+  throw new Error("Semua slot id_jari (1-127) sudah terpakai")
+}
+
 /**
  * Presensi mandiri: dosen membuka window presensi (presensi_mulai/presensi_selesai)
  * per pertemuan dari halaman mata kuliahnya. Kalau mahasiswa yang absen ini enroll

@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs"
 import { Prisma } from "@prisma/client"
 import { prisma } from "../lib/prisma.js"
 import { requireAuth } from "../lib/auth.js"
+import { pickUnusedIdJari } from "./device.js"
 import { serializeMahasiswa, serializeMataKuliah } from "../lib/serializers.js"
 import { dayNameOf, derivePresensiStatus, deriveSesiStatus, toJakartaIsoDate } from "../lib/sesi-status.js"
 
@@ -74,7 +75,7 @@ mahasiswaRouter.post("/", requireAuth("lecturer"), async (req, res) => {
   }
 
   const deviceId = process.env.DEVICE_KEY!
-  const idJari = Math.floor(Math.random() * 127) + 1
+  const idJari = pickUnusedIdJari()
   const cmd = await prisma.device_commands.create({
     data: {
       device_id: deviceId,
@@ -119,7 +120,7 @@ mahasiswaRouter.post("/:id/enroll", requireAuth("lecturer"), async (req, res) =>
   if (!mhs) return res.status(404).json({ ok: false, error: "Mahasiswa tidak ditemukan" })
 
   const deviceId = process.env.DEVICE_KEY!
-  const idJari = Math.floor(Math.random() * 127) + 1
+  const idJari = pickUnusedIdJari()
   const cmd = await prisma.device_commands.create({
     data: {
       device_id: deviceId,
