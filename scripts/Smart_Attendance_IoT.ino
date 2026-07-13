@@ -208,16 +208,20 @@ String kirimAbsensi(uint8_t id_jari, String nama_fallback) {
   // sampai 5 detik (timeout HTTP-nya sendiri); kalau jari discan pas momen itu dan
   // loop() ikut nunggu tanpa batas + ditambah POST absensi sendiri, total blocking
   // di 1 iterasi loop() gampang kelewat task watchdog ESP32 -> device reboot sendiri.
+  esp_task_wdt_reset(); // sebelum nunggu mutex -- xSemaphoreTake yang blocking gak otomatis "ngasih makan" task watchdog
+
   if (xSemaphoreTake(httpMutex, pdMS_TO_TICKS(3000))) {
     Serial.println("[HTTP] Mengirim data absensi ke server...");
+  esp_task_wdt_reset(); // sebelum POST -- ini yang kepanggil tiap scan absen (bukan cuma enroll), jadi paling sering numpuk delay
   // Server sekarang akan mengabaikan field "nama" dan mengambil dari database
   String jsonBody = "{\"id_jari\":" + String(id_jari) + ",\"nama\":\"" + nama_fallback + "\",\"status\":\"hadir\"}";
-  
+
   HTTPClient http;
   http.begin(SERVER_URL);
   http.addHeader("Content-Type", "application/json");
   http.addHeader("x-device-key", DEVICE_KEY);
-  
+  http.setTimeout(3000); // Batasi (default HTTPClient ~5 detik tanpa ini)
+
   int httpCode = http.POST(jsonBody);
   if (httpCode == 200) {
     Serial.println("[HTTP] BERHASIL MASUK SUPABASE!");
