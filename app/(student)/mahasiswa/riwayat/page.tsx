@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { format } from "date-fns"
 import { id } from "date-fns/locale"
 import type { DateRange } from "react-day-picker"
@@ -34,12 +34,12 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useCurrentUser } from "@/lib/stores/auth-store"
-import { attendanceRecords, devices, getCourseById } from "@/lib/mock"
+import { apiFetch } from "@/lib/api-client"
 import {
   ATTENDANCE_STATUS_BADGE_VARIANT,
   ATTENDANCE_STATUS_LABEL,
 } from "@/lib/dashboard/attendance-status"
-import type { AttendanceRecord, AttendanceStatus } from "@/lib/types"
+import type { AttendanceRecord, AttendanceStatus, AttendanceSummary } from "@/lib/types"
 
 const STATUS_FILTER_OPTIONS: AttendanceStatus[] = ["hadir", "izin", "sakit", "alpha"]
 
@@ -50,18 +50,13 @@ const EXCEL_COLUMNS: ExcelColumn<AttendanceRecord>[] = [
     value: (r) => format(new Date(r.timestamp), "d MMM yyyy", { locale: id }),
   },
   { header: "Waktu", width: 10, value: (r) => format(new Date(r.timestamp), "HH:mm"), align: "center" },
-  { header: "Mata Kuliah", width: 28, value: (r) => getCourseById(r.courseId)?.nama ?? r.courseId },
+  { header: "Mata Kuliah", width: 28, value: (r) => r.courseNama },
   { header: "Status", width: 12, value: (r) => ATTENDANCE_STATUS_LABEL[r.status], align: "center" },
   {
     header: "Metode",
     width: 14,
     value: (r) => (r.method === "fingerprint" ? "Fingerprint" : "Manual"),
     align: "center",
-  },
-  {
-    header: "Perangkat",
-    width: 18,
-    value: (r) => devices.find((d) => d.id === r.deviceId)?.nama ?? "-",
   },
 ]
 
@@ -81,28 +76,34 @@ export default function RiwayatPage() {
   const currentUser = useCurrentUser()
   const student = currentUser && "nim" in currentUser ? currentUser : null
 
+  const [allRecords, setAllRecords] = useState<AttendanceRecord[]>([])
+  const [enrolledCourses, setEnrolledCourses] = useState<AttendanceSummary[]>([])
   const [courseFilter, setCourseFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
   const [isExporting, setIsExporting] = useState(false)
 
+  useEffect(() => {
+    if (!student) return
+    apiFetch<{ data: AttendanceRecord[] }>(`/mahasiswa/${student.id}/presensi`).then((res) =>
+      setAllRecords(res.data)
+    )
+    apiFetch<{ data: AttendanceSummary[] }>(`/mahasiswa/${student.id}/presensi-summary`).then((res) =>
+      setEnrolledCourses(res.data)
+    )
+  }, [student])
+
   const records = useMemo(() => {
-    if (!student) return []
-    return attendanceRecords
-      .filter((r) => r.studentId === student.id)
+    return allRecords
       .filter((r) => courseFilter === "all" || r.courseId === courseFilter)
       .filter((r) => statusFilter === "all" || r.status === statusFilter)
       .filter((r) => isWithinRange(r.timestamp, dateRange))
       .sort(
         (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
       )
-  }, [student, courseFilter, statusFilter, dateRange])
+  }, [allRecords, courseFilter, statusFilter, dateRange])
 
   if (!student) return null
-
-  const enrolledCourses = student.enrolledCourseIds
-    .map((courseId) => getCourseById(courseId))
-    .filter((c): c is NonNullable<typeof c> => c !== null)
 
   const summaryCounts = STATUS_FILTER_OPTIONS.reduce<Record<string, number>>(
     (acc, status) => {
@@ -199,7 +200,7 @@ export default function RiwayatPage() {
               {(value: string | null) =>
                 !value || value === "all"
                   ? "Semua Mata Kuliah"
-                  : enrolledCourses.find((c) => c.id === value)?.nama ??
+                  : enrolledCourses.find((c) => c.courseId === value)?.courseNama ??
                     "Mata kuliah"
               }
             </SelectValue>
@@ -207,8 +208,8 @@ export default function RiwayatPage() {
           <SelectContent>
             <SelectItem value="all">Semua Mata Kuliah</SelectItem>
             {enrolledCourses.map((course) => (
-              <SelectItem key={course.id} value={course.id}>
-                {course.nama}
+              <SelectItem key={course.courseId} value={course.courseId}>
+                {course.courseNama}
               </SelectItem>
             ))}
           </SelectContent>
@@ -288,13 +289,10 @@ export default function RiwayatPage() {
                 <TableHead>Mata Kuliah</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Metode</TableHead>
-                <TableHead>Perangkat</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {records.map((record) => {
-                const course = getCourseById(record.courseId)
-                const device = devices.find((d) => d.id === record.deviceId)
                 const timestamp = new Date(record.timestamp)
                 return (
                   <TableRow key={record.id}>
@@ -304,7 +302,7 @@ export default function RiwayatPage() {
                     <TableCell className="text-muted-foreground">
                       {format(timestamp, "HH:mm")}
                     </TableCell>
-                    <TableCell>{course?.nama ?? record.courseId}</TableCell>
+                    <TableCell>{record.courseNama}</TableCell>
                     <TableCell>
                       <Badge variant={ATTENDANCE_STATUS_BADGE_VARIANT[record.status]}>
                         {ATTENDANCE_STATUS_LABEL[record.status]}
@@ -319,9 +317,6 @@ export default function RiwayatPage() {
                         )}
                         {record.method === "fingerprint" ? "Fingerprint" : "Manual"}
                       </span>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {device?.nama ?? "-"}
                     </TableCell>
                   </TableRow>
                 )

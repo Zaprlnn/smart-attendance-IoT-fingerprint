@@ -27,7 +27,6 @@ import {
   CommandList,
 } from "@/components/ui/command"
 import { ThemeToggle } from "@/components/theme-toggle"
-import { LiveBadge } from "@/components/dashboard/live-badge"
 import { useAuthStore, useCurrentUser } from "@/lib/stores/auth-store"
 import { LECTURER_NAV_ITEMS, STUDENT_NAV_ITEMS } from "@/lib/dashboard/nav-config"
 import { getInitials } from "@/lib/utils"
@@ -87,8 +86,6 @@ export function DashboardTopbar({ role, areaLabel }: DashboardTopbarProps) {
         <span className="text-muted-foreground/50">/</span>
         <span className="truncate font-medium">{currentPage}</span>
       </div>
-
-      <LiveBadge />
 
       <Button
         variant="outline"

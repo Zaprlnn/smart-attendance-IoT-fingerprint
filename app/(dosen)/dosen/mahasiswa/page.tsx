@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Fingerprint, Search, ShieldAlert, Users, X } from "lucide-react"
 
@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Select,
   SelectContent,
@@ -27,7 +28,13 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useMahasiswaDatabase } from "@/lib/realtime/use-mahasiswa"
-import { getAttendanceSummary } from "@/lib/mock"
+import { apiFetch } from "@/lib/api-client"
+
+interface AttendanceOverviewEntry {
+  totalSessions: number
+  hadir: number
+  persentaseHadir: number | null
+}
 
 function initials(nama: string): string {
   return nama
@@ -45,6 +52,13 @@ export default function DosenMahasiswaPage() {
   const [search, setSearch] = useState("")
   const [semesterFilter, setSemesterFilter] = useState("all")
   const [fingerprintFilter, setFingerprintFilter] = useState("all")
+  const [overview, setOverview] = useState<Record<string, AttendanceOverviewEntry>>({})
+
+  useEffect(() => {
+    apiFetch<{ data: Record<string, AttendanceOverviewEntry> }>("/mahasiswa/attendance-overview").then((res) =>
+      setOverview(res.data)
+    )
+  }, [])
 
   const semesterOptions = useMemo(
     () => Array.from(new Set(students.map((s) => s.semester))).sort((a, b) => a - b),
@@ -64,16 +78,12 @@ export default function DosenMahasiswaPage() {
         (s) =>
           !query || s.nama.toLowerCase().includes(query) || s.nim.includes(query)
       )
-      .map((student) => {
-        const summaries = getAttendanceSummary(student.id)
-        const totalSessions = summaries.reduce((acc, s) => acc + s.totalSessions, 0)
-        const totalHadir = summaries.reduce((acc, s) => acc + s.hadir, 0)
-        const persentaseHadir =
-          totalSessions === 0 ? null : Math.round((totalHadir / totalSessions) * 100)
-        return { student, persentaseHadir }
-      })
+      .map((student) => ({
+        student,
+        persentaseHadir: overview[student.id]?.persentaseHadir ?? null,
+      }))
       .sort((a, b) => a.student.nama.localeCompare(b.student.nama))
-  }, [students, search, semesterFilter, fingerprintFilter])
+  }, [students, search, semesterFilter, fingerprintFilter, overview])
 
   const hasActiveFilter =
     search.trim() !== "" || semesterFilter !== "all" || fingerprintFilter !== "all"
@@ -155,7 +165,13 @@ export default function DosenMahasiswaPage() {
         )}
       </div>
 
-      {rows.length === 0 ? (
+      {loading ? (
+        <div className="flex flex-col gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-14 rounded-lg" />
+          ))}
+        </div>
+      ) : rows.length === 0 ? (
         <EmptyState
           icon={Users}
           title="Tidak ada mahasiswa"

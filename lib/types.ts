@@ -18,23 +18,19 @@ export interface Student {
   id: string
   nim: string
   nama: string
-  /** Lowercase, tanpa spasi, diturunkan dari `nama` sesuai aturan login. */
-  password: string
   prodi: string
   semester: number
-  email: string
+  email: string | null
   avatarUrl?: string
   fingerprintEnrolled: boolean
-  enrolledCourseIds: string[]
+  idJari?: number | null
 }
 
 export interface Lecturer {
   id: string
   nip: string
   nama: string
-  /** Lowercase, tanpa spasi, diturunkan dari `nama` sesuai aturan login. */
-  password: string
-  email: string
+  email: string | null
   avatarUrl?: string
 }
 
@@ -44,8 +40,10 @@ export interface Course {
   nama: string
   sks: number
   dosenId: string
+  dosenNama?: string | null
   semester: number
   jadwal: JadwalKuliah
+  enrolledCount?: number
 }
 
 export type SessionStatus = "selesai" | "berlangsung" | "akan-datang"
@@ -65,14 +63,15 @@ export type AttendanceMethod = "fingerprint" | "manual"
 
 export interface AttendanceRecord {
   id: string
-  studentId: string
   courseId: string
-  sessionId: string
+  courseNama: string
+  sesiId: string
+  pertemuanKe: number
   /** ISO datetime. */
   timestamp: string
   status: AttendanceStatus
   method: AttendanceMethod
-  deviceId: string
+  deviceId: string | null
 }
 
 export type DeviceStatus = "online" | "offline"
@@ -113,6 +112,112 @@ export interface AttendanceSummary {
   persentaseHadir: number
   /** true jika persentaseHadir < 75 */
   isWarning: boolean
+}
+
+export type PresensiStatus = "belum_dibuka" | "dibuka" | "ditutup"
+
+/** Jadwal + status hari ini utk 1 mata kuliah yang di-enroll mahasiswa — GET /mahasiswa/:id/dashboard */
+export interface TodayCourseEntry {
+  course: Course
+  sesi: {
+    id: string
+    pertemuanKe: number
+    status: SessionStatus
+    presensiStatus: PresensiStatus
+  } | null
+  record: { status: AttendanceStatus } | null
+}
+
+/** GET /mata-kuliah/:id/sesi/hari-ini — window presensi mandiri pertemuan hari ini. */
+export interface SesiHariIni {
+  sesiId: string
+  pertemuanKe: number
+  topik: string
+  /** ISO datetime, null kalau belum pernah dibuka. */
+  presensiMulai: string | null
+  presensiSelesai: string | null
+  status: PresensiStatus
+}
+
+/** GET /presensi?mataKuliahId=&sesiId= — roster + status hadir utk 1 pertemuan spesifik. */
+export interface LiveRosterEntry {
+  mahasiswa: { id: string; nim: string; nama: string }
+  record: PresensiRow | null
+}
+
+export interface RosterEntry {
+  student: Student
+  hadir: number
+  izin: number
+  sakit: number
+  alpha: number
+  persentaseHadir: number
+  isWarning: boolean
+}
+
+export interface RecentActivityEntry {
+  id: string
+  courseId: string
+  courseNama: string
+  /** ISO datetime. */
+  timestamp: string
+  status: AttendanceStatus
+}
+
+export interface StudentDashboardData {
+  summaries: AttendanceSummary[]
+  todayCourses: TodayCourseEntry[]
+  recentActivity: RecentActivityEntry[]
+}
+
+/** Baris mentah dari tabel `presensi` di Supabase (dipakai oleh hook realtime). */
+export interface PresensiRow {
+  id: string
+  mahasiswa_id: string
+  mata_kuliah_id: string
+  sesi_id: string
+  status: AttendanceStatus
+  method: AttendanceMethod
+  device_id: string | null
+  timestamp: string
+}
+
+/** GET /mata-kuliah/hari-ini/list */
+export interface TodaySesiEntry {
+  sesiId: string
+  pertemuanKe: number
+  topik: string
+  status: SessionStatus
+  mataKuliah: Course
+}
+
+export interface DosenTodayEntry {
+  course: Course
+  sesi: { id: string; pertemuanKe: number; status: SessionStatus }
+  hadirCount: number
+  totalEnrolled: number
+}
+
+export interface DosenAtRiskRow {
+  studentId: string
+  nama: string
+  nim: string
+  courseId: string
+  courseNama: string
+  persentaseHadir: number
+}
+
+export interface DosenDashboardData {
+  myCourses: Course[]
+  uniqueStudentCount: number
+  todayEntries: DosenTodayEntry[]
+  hadirHariIni: number
+  onlineDevices: number
+  totalDevices: number
+  rateData: { kode: string; nama: string; rate: number }[]
+  trendData: { date: string; hadir: number }[]
+  atRiskRows: DosenAtRiskRow[]
+  hariIni: string
 }
 
 /** Baris dari tabel `absensi` di Supabase — dikirim langsung oleh ESP32. */

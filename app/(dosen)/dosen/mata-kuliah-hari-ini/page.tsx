@@ -2,22 +2,18 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { CalendarCheck, ChevronRight, MapPin, Router as RouterIcon, Users } from "lucide-react"
+import { CalendarCheck, ChevronRight, MapPin, Users } from "lucide-react"
 
 import { PageHeader } from "@/components/dashboard/page-header"
 import { EmptyState } from "@/components/dashboard/empty-state"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useCurrentUser } from "@/lib/stores/auth-store"
-import {
-  deviceForRoom,
-  getCoursesByLecturer,
-  getStudentsByCourse,
-  getTodayCourses,
-} from "@/lib/mock"
-import type { Course, Session } from "@/lib/types"
+import { apiFetch } from "@/lib/api-client"
+import type { Course, SessionStatus, TodaySesiEntry } from "@/lib/types"
 
-const STATUS_LABEL: Record<Session["status"], string> = {
+const STATUS_LABEL: Record<SessionStatus, string> = {
   berlangsung: "Berlangsung",
   "akan-datang": "Akan Datang",
   selesai: "Selesai",
@@ -25,16 +21,13 @@ const STATUS_LABEL: Record<Session["status"], string> = {
 
 function CourseRow({
   course,
-  session,
+  status,
   onClick,
 }: {
   course: Course
-  session?: Session
+  status?: SessionStatus
   onClick: () => void
 }) {
-  const device = deviceForRoom(course.jadwal.ruang)
-  const totalPeserta = getStudentsByCourse(course.id).length
-
   return (
     <li
       role="button"
@@ -59,19 +52,16 @@ function CourseRow({
           <span className="text-muted-foreground/50">•</span>
           <MapPin className="size-3" />
           {course.jadwal.ruang}
-          <span className="text-muted-foreground/50">•</span>
-          <RouterIcon className="size-3" />
-          {device.nama}
         </p>
       </div>
       <div className="flex items-center gap-2">
         <span className="flex items-center gap-1 text-sm text-muted-foreground">
           <Users className="size-3.5" />
-          {totalPeserta}
+          {course.enrolledCount ?? 0}
         </span>
-        {session && (
-          <Badge variant={session.status === "berlangsung" ? "success" : "outline"}>
-            {STATUS_LABEL[session.status]}
+        {status && (
+          <Badge variant={status === "berlangsung" ? "success" : "outline"}>
+            {STATUS_LABEL[status]}
           </Badge>
         )}
         <ChevronRight className="size-4 text-muted-foreground" />
@@ -84,21 +74,24 @@ export default function DosenMataKuliahHariIniPage() {
   const router = useRouter()
   const currentUser = useCurrentUser()
   const lecturer = currentUser && "nip" in currentUser ? currentUser : null
-  const [now, setNow] = useState<Date | null>(null)
+
+  const [loading, setLoading] = useState(true)
+  const [todayEntries, setTodayEntries] = useState<TodaySesiEntry[]>([])
+  const [allCourses, setAllCourses] = useState<Course[]>([])
 
   useEffect(() => {
-    const timer = setTimeout(() => setNow(new Date()), 0)
-    return () => clearTimeout(timer)
-  }, [])
+    if (!lecturer) return
+    Promise.all([
+      apiFetch<{ data: TodaySesiEntry[] }>("/mata-kuliah/hari-ini/list"),
+      apiFetch<{ data: Course[] }>(`/mata-kuliah?dosenId=${lecturer.id}`),
+    ]).then(([todayRes, allRes]) => {
+      setTodayEntries(todayRes.data)
+      setAllCourses(allRes.data)
+      setLoading(false)
+    })
+  }, [lecturer])
 
   if (!lecturer) return null
-
-  const myCourses = getCoursesByLecturer(lecturer.id)
-  const myCourseIds = myCourses.map((c) => c.id)
-
-  const todayEntries = now
-    ? getTodayCourses(now).filter((entry) => myCourseIds.includes(entry.course.id))
-    : []
 
   function goToCourse(courseId: string) {
     router.push(`/dosen/mata-kuliah-hari-ini/${courseId}`)
@@ -118,7 +111,13 @@ export default function DosenMataKuliahHariIniPage() {
         </TabsList>
 
         <TabsContent value="hari-ini" className="mt-4">
-          {todayEntries.length === 0 ? (
+          {loading ? (
+            <div className="flex flex-col gap-3">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <Skeleton key={i} className="h-16 rounded-lg" />
+              ))}
+            </div>
+          ) : todayEntries.length === 0 ? (
             <EmptyState
               icon={CalendarCheck}
               title="Tidak ada kelas hari ini"
@@ -126,12 +125,12 @@ export default function DosenMataKuliahHariIniPage() {
             />
           ) : (
             <ul className="flex flex-col gap-3">
-              {todayEntries.map(({ course, session }) => (
+              {todayEntries.map(({ mataKuliah, status }) => (
                 <CourseRow
-                  key={course.id}
-                  course={course}
-                  session={session}
-                  onClick={() => goToCourse(course.id)}
+                  key={mataKuliah.id}
+                  course={mataKuliah}
+                  status={status}
+                  onClick={() => goToCourse(mataKuliah.id)}
                 />
               ))}
             </ul>
@@ -139,7 +138,13 @@ export default function DosenMataKuliahHariIniPage() {
         </TabsContent>
 
         <TabsContent value="semua" className="mt-4">
-          {myCourses.length === 0 ? (
+          {loading ? (
+            <div className="flex flex-col gap-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-16 rounded-lg" />
+              ))}
+            </div>
+          ) : allCourses.length === 0 ? (
             <EmptyState
               icon={CalendarCheck}
               title="Belum ada mata kuliah"
@@ -147,7 +152,7 @@ export default function DosenMataKuliahHariIniPage() {
             />
           ) : (
             <ul className="flex flex-col gap-3">
-              {myCourses.map((course) => (
+              {allCourses.map((course) => (
                 <CourseRow key={course.id} course={course} onClick={() => goToCourse(course.id)} />
               ))}
             </ul>

@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { format } from "date-fns"
@@ -12,6 +13,7 @@ import { SectionCard } from "@/components/dashboard/section-card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
   Table,
@@ -22,28 +24,54 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useCurrentUser } from "@/lib/stores/auth-store"
-import {
-  getAttendanceSummary,
-  getCourseAttendance,
-  getCourseById,
-  getLecturerById,
-} from "@/lib/mock"
+import { apiFetch } from "@/lib/api-client"
 import {
   ATTENDANCE_STATUS_BADGE_VARIANT,
   ATTENDANCE_STATUS_LABEL,
   MIN_ATTENDANCE_PERCENTAGE,
 } from "@/lib/dashboard/attendance-status"
+import type { AttendanceRecord, AttendanceSummary, Course, Session } from "@/lib/types"
 
 export default function MataKuliahDetailPage() {
   const params = useParams<{ courseId: string }>()
+  const courseId = params.courseId
   const currentUser = useCurrentUser()
   const student = currentUser && "nim" in currentUser ? currentUser : null
 
+  const [loading, setLoading] = useState(true)
+  const [course, setCourse] = useState<Course | null>(null)
+  const [sessions, setSessions] = useState<Session[]>([])
+  const [summary, setSummary] = useState<AttendanceSummary | null>(null)
+  const [records, setRecords] = useState<AttendanceRecord[]>([])
+
+  useEffect(() => {
+    if (!student) return
+    Promise.all([
+      apiFetch<{ data: Course }>(`/mata-kuliah/${courseId}`).catch(() => null),
+      apiFetch<{ data: Session[] }>(`/mata-kuliah/${courseId}/sesi`).catch(() => ({ data: [] })),
+      apiFetch<{ data: AttendanceSummary[] }>(`/mahasiswa/${student.id}/presensi-summary`),
+      apiFetch<{ data: AttendanceRecord[] }>(`/mahasiswa/${student.id}/presensi`),
+    ]).then(([courseRes, sesiRes, summariesRes, recordsRes]) => {
+      setCourse(courseRes?.data ?? null)
+      setSessions(sesiRes.data)
+      setSummary(summariesRes.data.find((s) => s.courseId === courseId) ?? null)
+      setRecords(recordsRes.data.filter((r) => r.courseId === courseId))
+      setLoading(false)
+    })
+  }, [student, courseId])
+
   if (!student) return null
 
-  const courseId = params.courseId
-  const course = getCourseById(courseId)
-  const isEnrolled = student.enrolledCourseIds.includes(courseId)
+  if (loading) {
+    return (
+      <>
+        <PageHeader title="Mata Kuliah" />
+        <Skeleton className="h-64 rounded-xl" />
+      </>
+    )
+  }
+
+  const isEnrolled = summary !== null
 
   if (!course || !isEnrolled) {
     return (
@@ -69,12 +97,8 @@ export default function MataKuliahDetailPage() {
     )
   }
 
-  const lecturer = getLecturerById(course.dosenId)
-  const summary = getAttendanceSummary(student.id).find(
-    (s) => s.courseId === courseId
-  )
-  const details = getCourseAttendance(student.id, courseId)
   const isWarning = summary?.isWarning ?? false
+  const recordBySesiId = new Map(records.map((r) => [r.sesiId, r]))
 
   return (
     <>
@@ -101,7 +125,7 @@ export default function MataKuliahDetailPage() {
             <User className="mt-0.5 size-4 text-muted-foreground" />
             <div>
               <p className="text-xs text-muted-foreground">Dosen</p>
-              <p className="text-sm font-medium">{lecturer?.nama ?? "-"}</p>
+              <p className="text-sm font-medium">{course.dosenNama ?? "-"}</p>
             </div>
           </div>
           <div className="flex items-start gap-2">
@@ -170,35 +194,36 @@ export default function MataKuliahDetailPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {details.map(({ session, record }) => (
-              <TableRow key={session.id}>
-                <TableCell>{session.pertemuanKe}</TableCell>
-                <TableCell>
-                  {format(new Date(session.tanggal), "d MMM yyyy", {
-                    locale: id,
-                  })}
-                </TableCell>
-                <TableCell className="max-w-64 truncate">
-                  {session.topik}
-                </TableCell>
-                <TableCell>
-                  {record ? (
-                    <Badge variant={ATTENDANCE_STATUS_BADGE_VARIANT[record.status]}>
-                      {ATTENDANCE_STATUS_LABEL[record.status]}
-                    </Badge>
-                  ) : session.status === "akan-datang" ? (
-                    <Badge variant="outline">Akan Datang</Badge>
-                  ) : (
-                    <Badge variant="outline">Belum Presensi</Badge>
-                  )}
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {record
-                    ? format(new Date(record.timestamp), "HH:mm")
-                    : "-"}
-                </TableCell>
-              </TableRow>
-            ))}
+            {sessions.map((session) => {
+              const record = recordBySesiId.get(session.id)
+              return (
+                <TableRow key={session.id}>
+                  <TableCell>{session.pertemuanKe}</TableCell>
+                  <TableCell>
+                    {format(new Date(session.tanggal), "d MMM yyyy", {
+                      locale: id,
+                    })}
+                  </TableCell>
+                  <TableCell className="max-w-64 truncate">
+                    {session.topik}
+                  </TableCell>
+                  <TableCell>
+                    {record ? (
+                      <Badge variant={ATTENDANCE_STATUS_BADGE_VARIANT[record.status]}>
+                        {ATTENDANCE_STATUS_LABEL[record.status]}
+                      </Badge>
+                    ) : session.status === "akan-datang" ? (
+                      <Badge variant="outline">Akan Datang</Badge>
+                    ) : (
+                      <Badge variant="outline">Belum Presensi</Badge>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {record ? format(new Date(record.timestamp), "HH:mm") : "-"}
+                  </TableCell>
+                </TableRow>
+              )
+            })}
           </TableBody>
         </Table>
       </SectionCard>

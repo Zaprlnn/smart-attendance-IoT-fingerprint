@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { UserPlus } from "lucide-react"
 import { toast } from "sonner"
-import { createClient } from "@/lib/client"
+import { apiFetch } from "@/lib/api-client"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -67,47 +67,19 @@ export function RegisterStudentDialog() {
     setLoading(true)
 
     try {
-      const supabase = createClient()
-      
-      // 1. Buat record mahasiswa sementara (id_jari masih null)
-      const { data: mhs, error: mhsErr } = await supabase
-        .from("mahasiswa")
-        .insert({
+      const res = await apiFetch<{ ok: true; commandId: string }>("/mahasiswa", {
+        method: "POST",
+        body: JSON.stringify({
           nama: form.nama.trim(),
           nim: form.nim.trim(),
           prodi: form.prodi,
           semester: Number(form.semester),
           email: form.email.trim(),
-          fingerprint_enrolled: false
-        })
-        .select("id")
-        .single()
-
-      if (mhsErr || !mhs) throw new Error("Gagal menyimpan data mahasiswa: " + mhsErr?.message)
-
-      // 2. Buat antrean perintah ke ESP32
-      const deviceId = process.env.NEXT_PUBLIC_DEVICE_KEY;
-      // Cari ID Jari yang tersedia (simplifikasi: generate random atau sequential)
-      // Dalam kasus ini, untuk demo kita asumsikan ID jari dari 1-127 belum dipakai semua
-      // (Bisa juga dibikin otomatis cari max(id_jari) + 1)
-      const idJari = Math.floor(Math.random() * 127) + 1
-
-      const { data: cmd, error: cmdErr } = await supabase
-        .from("device_commands")
-        .insert({
-          device_id: deviceId,
-          command: "enroll",
-          payload: { id_jari: idJari, mahasiswa_id: mhs.id },
-          status: "pending"
-        })
-        .select("id")
-        .single()
-
-      if (cmdErr || !cmd) throw new Error("Gagal membuat antrean ESP32")
-
-      setCommandId(cmd.id)
-    } catch (err: any) {
-      toast.error("Error", { description: err.message })
+        }),
+      })
+      setCommandId(res.commandId)
+    } catch (err) {
+      toast.error("Error", { description: err instanceof Error ? err.message : String(err) })
     } finally {
       setLoading(false)
     }
@@ -216,7 +188,7 @@ export function RegisterStudentDialog() {
 
         <SheetFooter className="flex-row justify-end gap-2">
           <SheetClose render={<Button variant="outline" />}>Batal</SheetClose>
-          <Button disabled={!isFormValid || !fingerprintDone} onClick={handleSubmit}>
+          <Button disabled={loading || !isFormValid || !fingerprintDone} onClick={handleSubmit}>
             Simpan Mahasiswa
           </Button>
         </SheetFooter>

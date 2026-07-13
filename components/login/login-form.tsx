@@ -19,7 +19,6 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { PasswordInput } from "@/components/login/password-input"
 import { useAuthStore } from "@/lib/stores/auth-store"
-import { lecturers, students } from "@/lib/mock"
 
 type RoleTab = "mahasiswa" | "dosen"
 
@@ -33,8 +32,9 @@ interface FieldErrors {
   password?: string
 }
 
-const DEMO_STUDENT = students.find((s) => s.nim === "2300016035")
-const DEMO_LECTURER = lecturers.find((l) => l.nip === "60880123")
+// Akun demo — lihat README (password = nama lengkap, huruf kecil tanpa spasi).
+const DEMO_STUDENT = { nim: "2300016035", password: "alvindraramadhan" }
+const DEMO_LECTURER = { nip: "60880123", password: "hendrowicaksono" }
 
 const DASHBOARD_BY_ROLE: Record<"student" | "lecturer", string> = {
   student: "/mahasiswa/dashboard",
@@ -106,21 +106,22 @@ export function LoginForm() {
       if (Object.keys(errors).length > 0) return
 
       setIsSubmitting(true)
-      // Delay singkat agar terasa seperti proses verifikasi sungguhan (mock).
-      setTimeout(() => {
-        const result = login(field.identifier.trim(), field.password)
-        setIsSubmitting(false)
-
-        if (!result) {
-          toast.error("Login gagal", {
-            description: `${label} atau password salah.`,
-          })
-          return
-        }
-
-        toast.success(`Selamat datang, ${result.user.nama}`)
-        router.push(DASHBOARD_BY_ROLE[result.role])
-      }, 500)
+      const backendRole = role === "mahasiswa" ? "student" : "lecturer"
+      login(backendRole, field.identifier.trim(), field.password)
+        .then((result) => {
+          if (!result) {
+            toast.error("Login gagal", {
+              description: `${label} atau password salah.`,
+            })
+            return
+          }
+          toast.success(`Selamat datang, ${result.user.nama}`)
+          router.push(DASHBOARD_BY_ROLE[result.role])
+        })
+        .catch(() => {
+          toast.error("Login gagal", { description: "Tidak bisa terhubung ke server." })
+        })
+        .finally(() => setIsSubmitting(false))
     }
   }
 

@@ -63,7 +63,7 @@ export function WarningActionModal({
       }>
         Tindakan
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[460px]">
+      <DialogContent className="sm:max-w-115">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-warning-foreground">
             <AlertTriangle className="size-5" /> Deteksi Dini Kritis

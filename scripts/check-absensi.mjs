@@ -14,21 +14,6 @@ const headers = {
   Accept: "application/json",
 };
 
-// ── Helper: jalankan SQL via REST ──────────────────────────────────────────
-async function runSQL(sql) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/exec_sql`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ query: sql }),
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    return { ok: false, error: text };
-  }
-  const data = await res.json();
-  return { ok: true, data };
-}
-
 // ── Helper: cek tabel via information_schema ───────────────────────────────
 async function getColumns() {
   const url =

@@ -1,8 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { format } from "date-fns"
-import { ArrowRight, Radio } from "lucide-react"
+import { ArrowRight, Fingerprint, Radio } from "lucide-react"
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -10,26 +9,28 @@ import { Button } from "@/components/ui/button"
 import { EmptyState } from "@/components/dashboard/empty-state"
 import { LiveBadge } from "@/components/dashboard/live-badge"
 import { getInitials } from "@/lib/utils"
-import type { ScanEvent } from "@/lib/realtime/types"
+import type { AbsensiRow } from "@/lib/types"
 
 interface MonitoringFeedPreviewProps {
-  events: ScanEvent[]
+  rows: AbsensiRow[]
+  isConnected: boolean
   limit?: number
   viewAllHref?: string
 }
 
-/** Preview feed ringkas, dipakai di dashboard dosen & bisa dipakai ulang di halaman Monitoring penuh. */
+/** Preview feed ringkas (data absensi real dari ESP32), dipakai di dashboard dosen. */
 export function MonitoringFeedPreview({
-  events,
+  rows,
+  isConnected,
   limit = 5,
   viewAllHref,
 }: MonitoringFeedPreviewProps) {
-  const items = events.slice(0, limit)
+  const items = rows.slice(0, limit)
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <LiveBadge />
+        <LiveBadge isLive={isConnected} />
         {viewAllHref && (
           <Button
             variant="ghost"
@@ -48,29 +49,31 @@ export function MonitoringFeedPreview({
         <EmptyState
           icon={Radio}
           title="Belum ada aktivitas"
-          description="Simulator presensi belum berjalan."
+          description="Belum ada scan fingerprint yang masuk."
           className="border-none py-8"
         />
       ) : (
         <ul className="flex flex-col gap-2">
-          {items.map((event) => (
+          {items.map((row) => (
             <li
-              key={event.id}
+              key={row.id}
               className="flex items-center gap-3 rounded-lg border border-border p-2.5 text-sm"
             >
               <Avatar size="sm">
-                <AvatarFallback>{getInitials(event.studentNama)}</AvatarFallback>
+                <AvatarFallback>
+                  {row.nama ? getInitials(row.nama) : <Fingerprint className="size-3.5" />}
+                </AvatarFallback>
               </Avatar>
               <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate font-medium">{event.studentNama}</span>
+                <span className="truncate font-medium">{row.nama}</span>
                 <span className="truncate text-xs text-muted-foreground">
-                  {event.courseNama} • {event.ruang}
+                  ID Jari #{row.id_jari}
                 </span>
               </div>
               <div className="flex flex-col items-end gap-1">
-                <Badge variant="success">Hadir</Badge>
+                <Badge variant="success">{row.status}</Badge>
                 <span className="text-xs text-muted-foreground">
-                  {format(new Date(event.timestamp), "HH:mm:ss")}
+                  {new Date(row.waktu).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
                 </span>
               </div>
             </li>

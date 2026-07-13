@@ -22,9 +22,9 @@ interface RoleGuardProps {
 }
 
 /**
- * Guard sisi client untuk area yang butuh role tertentu. Karena auth masih
- * mock (zustand persist), status login baru pasti setelah `hasHydrated` true —
- * sebelum itu tampilkan loading agar tidak flicker ke /login.
+ * Guard sisi client untuk area yang butuh role tertentu. Status auth di-persist
+ * zustand ke localStorage, jadi baru pasti setelah `hasHydrated` true — sebelum
+ * itu tampilkan loading agar tidak flicker ke /login.
  */
 export function RoleGuard({ role, children }: RoleGuardProps) {
   const router = useRouter()

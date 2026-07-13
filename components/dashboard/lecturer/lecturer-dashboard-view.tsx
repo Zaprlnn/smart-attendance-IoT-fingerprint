@@ -48,17 +48,9 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart"
 import { useCurrentUser } from "@/lib/stores/auth-store"
-import { useRealtimeSimulator } from "@/lib/realtime/use-realtime-simulator"
-import {
-  attendanceRecords,
-  deviceForRoom,
-  devices,
-  getAttendanceSummary,
-  getCoursesByLecturer,
-  getStudentsByCourse,
-  getTodayCourses,
-  sessions,
-} from "@/lib/mock"
+import { apiFetch } from "@/lib/api-client"
+import { useAbsensiRealtime } from "@/lib/realtime/use-absensi-realtime"
+import type { DosenDashboardData } from "@/lib/types"
 
 const RATE_CHART_CONFIG: ChartConfig = {
   rate: { label: "Tingkat Kehadiran", color: "var(--primary)" },
@@ -72,124 +64,41 @@ function StatsSkeleton() {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {Array.from({ length: 4 }).map((_, i) => (
-        <Skeleton key={i} className="h-[112px] rounded-xl" />
+        <Skeleton key={i} className="h-28 rounded-xl" />
       ))}
     </div>
   )
 }
 
-interface AtRiskRow {
-  studentId: string
-  nama: string
-  nim: string
-  courseId: string
-  courseNama: string
-  persentaseHadir: number
-}
-
 export function LecturerDashboardView() {
   const currentUser = useCurrentUser()
   const lecturer = currentUser && "nip" in currentUser ? currentUser : null
-  const { events, isPlaying } = useRealtimeSimulator()
+  const { rows: absensiRows, isConnected } = useAbsensiRealtime(5)
 
   const [loading, setLoading] = useState(true)
-  const [now, setNow] = useState<Date | null>(null)
+  const [data, setData] = useState<DosenDashboardData | null>(null)
+  const now = new Date()
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setNow(new Date())
-      setLoading(false)
-    }, 600)
-    return () => clearTimeout(timer)
-  }, [])
+    if (!lecturer) return
+    apiFetch<{ data: DosenDashboardData }>(`/dosen/${lecturer.id}/dashboard`)
+      .then((res) => setData(res.data))
+      .finally(() => setLoading(false))
+  }, [lecturer])
 
   if (!lecturer) return null
 
-  const myCourses = getCoursesByLecturer(lecturer.id)
-  const myCourseIds = myCourses.map((c) => c.id)
-
-  const uniqueStudentIds = new Set<string>()
-  myCourses.forEach((course) => {
-    getStudentsByCourse(course.id).forEach((student) => {
-      uniqueStudentIds.add(student.id)
-    })
-  })
-
-  const todayEntries = now
-    ? getTodayCourses(now).filter((entry) => myCourseIds.includes(entry.course.id))
-    : []
-
-  const sesiBerlangsung = todayEntries.filter(
-    (entry) => entry.session.status === "berlangsung"
-  ).length
-
-  const hadirHariIni = todayEntries.reduce((acc, entry) => {
-    return (
-      acc +
-      attendanceRecords.filter(
-        (r) => r.sessionId === entry.session.id && r.status === "hadir"
-      ).length
-    )
-  }, 0)
-
-  const onlineDevices = devices.filter((d) => d.status === "online").length
-
-  // Tingkat kehadiran per mata kuliah (bar chart)
-  const rateData = myCourses.map((course) => {
-    const records = attendanceRecords.filter((r) => r.courseId === course.id)
-    const hadir = records.filter((r) => r.status === "hadir").length
-    const rate = records.length === 0 ? 0 : Math.round((hadir / records.length) * 100)
-    return { kode: course.kode, nama: course.nama, rate }
-  })
-
-  // Tren harian (area chart) — jumlah hadir per tanggal pertemuan, 10 hari terakhir.
-  const sessionById = new Map(sessions.map((s) => [s.id, s]))
-  const dailyHadir: Record<string, number> = {}
-  attendanceRecords.forEach((r) => {
-    if (!myCourseIds.includes(r.courseId) || r.status !== "hadir") return
-    const session = sessionById.get(r.sessionId)
-    if (!session) return
-    dailyHadir[session.tanggal] = (dailyHadir[session.tanggal] ?? 0) + 1
-  })
-  const trendData = Object.entries(dailyHadir)
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .slice(-10)
-    .map(([date, hadir]) => ({
-      date,
-      label: format(new Date(date), "d MMM", { locale: id }),
-      hadir,
-    }))
-
-  // Mahasiswa perlu perhatian (<75%)
-  const atRiskRows: AtRiskRow[] = []
-  myCourses.forEach((course) => {
-    getStudentsByCourse(course.id).forEach((student) => {
-      const summary = getAttendanceSummary(student.id).find(
-        (s) => s.courseId === course.id
-      )
-      if (summary?.isWarning) {
-        atRiskRows.push({
-          studentId: student.id,
-          nama: student.nama,
-          nim: student.nim,
-          courseId: course.id,
-          courseNama: course.nama,
-          persentaseHadir: summary.persentaseHadir,
-        })
-      }
-    })
-  })
-  atRiskRows.sort((a, b) => a.persentaseHadir - b.persentaseHadir)
+  const todayEntries = data?.todayEntries ?? []
+  const rateData = data?.rateData ?? []
+  const trendData =
+    data?.trendData.map((t) => ({ ...t, label: format(new Date(t.date), "d MMM", { locale: id }) })) ?? []
+  const atRiskRows = data?.atRiskRows ?? []
 
   return (
     <>
       <DashboardHero
         title={`Halo, ${lecturer.nama.split(" ")[0]}`}
-        description={
-          now
-            ? format(now, "EEEE, d MMMM yyyy", { locale: id })
-            : "Memuat tanggal hari ini..."
-        }
+        description={format(now, "EEEE, d MMMM yyyy", { locale: id })}
       />
 
       {loading ? (
@@ -198,26 +107,26 @@ export function LecturerDashboardView() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
             title="Total Mahasiswa"
-            value={String(uniqueStudentIds.size)}
+            value={String(data?.uniqueStudentCount ?? 0)}
             icon={Users}
           />
           <StatCard
             title="Hadir Hari Ini"
-            value={String(hadirHariIni)}
+            value={String(data?.hadirHariIni ?? 0)}
             icon={CheckCircle2}
-            tone={hadirHariIni > 0 ? "success" : "default"}
+            tone={(data?.hadirHariIni ?? 0) > 0 ? "success" : "default"}
           />
           <StatCard
             title="Sesi Berlangsung"
-            value={String(sesiBerlangsung)}
+            value={String(todayEntries.filter((e) => e.sesi.status === "berlangsung").length)}
             icon={Radio}
-            tone={sesiBerlangsung > 0 ? "success" : "default"}
+            tone={todayEntries.some((e) => e.sesi.status === "berlangsung") ? "success" : "default"}
           />
           <StatCard
             title="Perangkat Online"
-            value={`${onlineDevices}/${devices.length}`}
+            value={`${data?.onlineDevices ?? 0}/${data?.totalDevices ?? 0}`}
             icon={Router}
-            tone={onlineDevices === devices.length ? "success" : "warning"}
+            tone={(data?.onlineDevices ?? 0) === (data?.totalDevices ?? 0) ? "success" : "warning"}
           />
         </div>
       )}
@@ -243,17 +152,8 @@ export function LecturerDashboardView() {
               />
             ) : (
               <ul className="flex flex-col gap-3">
-                {todayEntries.map(({ course, session }) => {
-                  const totalEnrolled = getStudentsByCourse(course.id).length
-                  const hadirCount = attendanceRecords.filter(
-                    (r) => r.sessionId === session.id && r.status === "hadir"
-                  ).length
-                  const device = deviceForRoom(course.jadwal.ruang)
-                  const pct =
-                    totalEnrolled === 0
-                      ? 0
-                      : Math.round((hadirCount / totalEnrolled) * 100)
-
+                {todayEntries.map(({ course, sesi, hadirCount, totalEnrolled }) => {
+                  const pct = totalEnrolled === 0 ? 0 : Math.round((hadirCount / totalEnrolled) * 100)
                   return (
                     <li
                       key={course.id}
@@ -267,12 +167,10 @@ export function LecturerDashboardView() {
                             <span className="text-muted-foreground/50">•</span>
                             <MapPin className="size-3" />
                             {course.jadwal.ruang}
-                            <span className="text-muted-foreground/50">•</span>
-                            {device.nama}
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
-                          {session.status === "berlangsung" && (
+                          {sesi.status === "berlangsung" && (
                             <Badge className="bg-primary/10 text-primary">
                               Berlangsung
                             </Badge>
@@ -296,11 +194,11 @@ export function LecturerDashboardView() {
               description="Persentase rata-rata sepanjang semester."
             >
               {loading ? (
-                <Skeleton className="h-[220px] rounded-lg" />
+                <Skeleton className="h-55 rounded-lg" />
               ) : rateData.length === 0 ? (
                 <EmptyState title="Belum ada data" className="border-none py-10" />
               ) : (
-                <ChartContainer config={RATE_CHART_CONFIG} className="aspect-auto h-[220px] w-full">
+                <ChartContainer config={RATE_CHART_CONFIG} className="aspect-auto h-55 w-full">
                   <BarChart data={rateData}>
                     <CartesianGrid vertical={false} />
                     <XAxis dataKey="kode" tickLine={false} axisLine={false} fontSize={11} />
@@ -336,11 +234,11 @@ export function LecturerDashboardView() {
               description="Jumlah mahasiswa hadir per pertemuan."
             >
               {loading ? (
-                <Skeleton className="h-[220px] rounded-lg" />
+                <Skeleton className="h-55 rounded-lg" />
               ) : trendData.length === 0 ? (
                 <EmptyState title="Belum ada data" className="border-none py-10" />
               ) : (
-                <ChartContainer config={TREND_CHART_CONFIG} className="aspect-auto h-[220px] w-full">
+                <ChartContainer config={TREND_CHART_CONFIG} className="aspect-auto h-55 w-full">
                   <AreaChart data={trendData}>
                     <CartesianGrid vertical={false} />
                     <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
@@ -436,9 +334,9 @@ export function LecturerDashboardView() {
 
         <SectionCard
           title="Monitoring Live"
-          description={isPlaying ? "Sedang berjalan" : "Simulator tidak aktif"}
+          description={isConnected ? "Terhubung ke realtime" : "Menghubungkan..."}
         >
-          <MonitoringFeedPreview events={events} viewAllHref="/dosen/monitoring" />
+          <MonitoringFeedPreview rows={absensiRows} isConnected={isConnected} viewAllHref="/dosen/monitoring" />
         </SectionCard>
       </div>
     </>

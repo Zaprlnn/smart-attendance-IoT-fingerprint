@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { BookOpen, ListChecks, Mail, Percent, UserX } from "lucide-react"
 
 import { PageHeader } from "@/components/dashboard/page-header"
@@ -9,16 +10,24 @@ import { ThemeSection } from "@/components/dashboard/profile/theme-section"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { useCurrentUser } from "@/lib/stores/auth-store"
-import { getAttendanceSummary } from "@/lib/mock"
+import { apiFetch } from "@/lib/api-client"
 import { getInitials } from "@/lib/utils"
+import type { AttendanceSummary } from "@/lib/types"
 
 export default function StudentProfilPage() {
   const currentUser = useCurrentUser()
   const student = currentUser && "nim" in currentUser ? currentUser : null
+  const [summaries, setSummaries] = useState<AttendanceSummary[]>([])
+
+  useEffect(() => {
+    if (!student) return
+    apiFetch<{ data: AttendanceSummary[] }>(`/mahasiswa/${student.id}/presensi-summary`).then((res) =>
+      setSummaries(res.data)
+    )
+  }, [student])
 
   if (!student) return null
 
-  const summaries = getAttendanceSummary(student.id)
   const totalSessions = summaries.reduce((acc, s) => acc + s.totalSessions, 0)
   const totalHadir = summaries.reduce((acc, s) => acc + s.hadir, 0)
   const totalAlpha = summaries.reduce((acc, s) => acc + s.alpha, 0)
@@ -87,7 +96,7 @@ export default function StudentProfilPage() {
             />
             <StatCard
               title="Mata Kuliah Aktif"
-              value={String(student.enrolledCourseIds.length)}
+              value={String(summaries.length)}
               icon={BookOpen}
             />
           </SectionCard>

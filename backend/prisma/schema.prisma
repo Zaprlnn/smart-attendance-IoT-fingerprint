@@ -1,0 +1,141 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model absensi {
+  id         BigInt   @id @default(autoincrement())
+  id_jari    Int
+  nama       String
+  status     String   @default("hadir")
+  waktu      DateTime @default(now()) @db.Timestamptz(6)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model device_commands {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  device_id  String
+  command    String
+  payload    Json?
+  status     String?   @default("pending")
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at DateTime? @default(now()) @db.Timestamptz(6)
+}
+
+model mahasiswa {
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nim                  String    @unique
+  nama                 String
+  prodi                String
+  semester             Int
+  email                String?
+  id_jari              Int?
+  fingerprint_enrolled Boolean?  @default(false)
+  created_at           DateTime? @default(now()) @db.Timestamptz(6)
+  password_hash        String?
+
+  enrollments enrollment[]
+  presensi    presensi[]
+}
+
+model dosen {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nip           String   @unique
+  nama          String
+  email         String?
+  password_hash String
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+
+  mata_kuliah mata_kuliah[]
+}
+
+model mata_kuliah {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  kode        String   @unique
+  nama        String
+  sks         Int
+  dosen_id    String   @db.Uuid
+  semester    Int
+  /// Senin | Selasa | Rabu | Kamis | Jumat | Sabtu | Minggu
+  hari        String
+  jam_mulai   String
+  jam_selesai String
+  ruang       String
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  dosen       dosen        @relation(fields: [dosen_id], references: [id])
+  enrollments enrollment[]
+  sesi        sesi[]
+  presensi    presensi[]
+}
+
+model enrollment {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  mahasiswa_id   String   @db.Uuid
+  mata_kuliah_id String   @db.Uuid
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+
+  mahasiswa   mahasiswa   @relation(fields: [mahasiswa_id], references: [id])
+  mata_kuliah mata_kuliah @relation(fields: [mata_kuliah_id], references: [id])
+
+  @@unique([mahasiswa_id, mata_kuliah_id])
+}
+
+model sesi {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  mata_kuliah_id String   @db.Uuid
+  pertemuan_ke   Int
+  tanggal        DateTime @db.Date
+  topik          String
+
+  /// null = presensi belum pernah dibuka dosen utk pertemuan ini.
+  presensi_mulai   DateTime? @db.Timestamptz(6)
+  /// Window aktif = presensi_mulai <= now <= presensi_selesai. Tutup lebih awal
+  /// = set kolom ini ke waktu sekarang (tidak perlu flag terpisah).
+  presensi_selesai DateTime? @db.Timestamptz(6)
+
+  mata_kuliah mata_kuliah @relation(fields: [mata_kuliah_id], references: [id])
+  presensi    presensi[]
+
+  @@unique([mata_kuliah_id, pertemuan_ke])
+}
+
+/// Sumber kebenaran persentase kehadiran, rekap, dan warning <75%.
+model presensi {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  mahasiswa_id   String   @db.Uuid
+  mata_kuliah_id String   @db.Uuid
+  sesi_id        String   @db.Uuid
+  /// hadir | izin | sakit | alpha
+  status         String   @default("hadir")
+  /// fingerprint | manual
+  method         String   @default("manual")
+  device_id      String?
+  timestamp      DateTime @default(now()) @db.Timestamptz(6)
+
+  mahasiswa   mahasiswa   @relation(fields: [mahasiswa_id], references: [id])
+  mata_kuliah mata_kuliah @relation(fields: [mata_kuliah_id], references: [id])
+  sesi        sesi        @relation(fields: [sesi_id], references: [id])
+
+  @@unique([mahasiswa_id, sesi_id])
+}
+
+model device {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nama                String
+  ruang               String
+  device_key          String    @unique
+  /// online | offline
+  status              String    @default("offline")
+  sensor_ok           Boolean   @default(true)
+  signal              Int       @default(0)
+  last_seen           DateTime? @db.Timestamptz(6)
+  total_scan_hari_ini Int       @default(0)
+  created_at          DateTime  @default(now()) @db.Timestamptz(6)
+}

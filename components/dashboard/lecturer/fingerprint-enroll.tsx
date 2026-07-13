@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect } from "react"
 import { CheckCircle2, Fingerprint } from "lucide-react"
 
 import { Button } from "@/components/ui/button"

@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { BookOpen, Mail, Router, Users } from "lucide-react"
 
 import { PageHeader } from "@/components/dashboard/page-header"
@@ -9,21 +10,21 @@ import { ThemeSection } from "@/components/dashboard/profile/theme-section"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { useCurrentUser } from "@/lib/stores/auth-store"
-import { devices, getCoursesByLecturer, getStudentsByCourse } from "@/lib/mock"
+import { apiFetch } from "@/lib/api-client"
 import { getInitials } from "@/lib/utils"
+import type { DosenDashboardData } from "@/lib/types"
 
 export default function DosenProfilPage() {
   const currentUser = useCurrentUser()
   const lecturer = currentUser && "nip" in currentUser ? currentUser : null
+  const [data, setData] = useState<DosenDashboardData | null>(null)
+
+  useEffect(() => {
+    if (!lecturer) return
+    apiFetch<{ data: DosenDashboardData }>(`/dosen/${lecturer.id}/dashboard`).then((res) => setData(res.data))
+  }, [lecturer])
 
   if (!lecturer) return null
-
-  const myCourses = getCoursesByLecturer(lecturer.id)
-  const uniqueStudentIds = new Set<string>()
-  myCourses.forEach((course) => {
-    getStudentsByCourse(course.id).forEach((s) => uniqueStudentIds.add(s.id))
-  })
-  const onlineDevices = devices.filter((d) => d.status === "online").length
 
   return (
     <>
@@ -63,13 +64,13 @@ export default function DosenProfilPage() {
             description="Aktivitasmu sebagai dosen di Smart Attendance."
             contentClassName="grid gap-4 sm:grid-cols-3"
           >
-            <StatCard title="Mata Kuliah Diampu" value={String(myCourses.length)} icon={BookOpen} />
-            <StatCard title="Total Mahasiswa" value={String(uniqueStudentIds.size)} icon={Users} />
+            <StatCard title="Mata Kuliah Diampu" value={String(data?.myCourses.length ?? 0)} icon={BookOpen} />
+            <StatCard title="Total Mahasiswa" value={String(data?.uniqueStudentCount ?? 0)} icon={Users} />
             <StatCard
               title="Perangkat Online"
-              value={`${onlineDevices}/${devices.length}`}
+              value={`${data?.onlineDevices ?? 0}/${data?.totalDevices ?? 0}`}
               icon={Router}
-              tone={onlineDevices === devices.length ? "success" : "warning"}
+              tone={(data?.onlineDevices ?? 0) === (data?.totalDevices ?? 0) ? "success" : "warning"}
             />
           </SectionCard>
         </div>

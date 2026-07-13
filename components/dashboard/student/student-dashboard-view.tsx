@@ -28,17 +28,12 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart"
 import { useCurrentUser } from "@/lib/stores/auth-store"
-import {
-  attendanceRecords,
-  getAttendanceSummary,
-  getCourseById,
-  getTodayCourses,
-} from "@/lib/mock"
+import { apiFetch } from "@/lib/api-client"
 import {
   ATTENDANCE_STATUS_BADGE_VARIANT as STATUS_BADGE_VARIANT,
   ATTENDANCE_STATUS_LABEL as STATUS_LABEL,
 } from "@/lib/dashboard/attendance-status"
-import type { AttendanceStatus } from "@/lib/types"
+import type { AttendanceStatus, StudentDashboardData } from "@/lib/types"
 
 const COMPOSITION_CHART_CONFIG: ChartConfig = {
   hadir: { label: "Hadir", color: "var(--success)" },
@@ -51,7 +46,7 @@ function StatsSkeleton() {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {Array.from({ length: 4 }).map((_, i) => (
-        <Skeleton key={i} className="h-[112px] rounded-xl" />
+        <Skeleton key={i} className="h-28 rounded-xl" />
       ))}
     </div>
   )
@@ -62,20 +57,32 @@ export function StudentDashboardView() {
   const student = currentUser && "nim" in currentUser ? currentUser : null
 
   const [loading, setLoading] = useState(true)
-  const [now, setNow] = useState<Date | null>(null)
+  const [data, setData] = useState<StudentDashboardData | null>(null)
+  const now = new Date()
+
+  const studentId = student?.id
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setNow(new Date())
-      setLoading(false)
-    }, 600)
-    return () => clearTimeout(timer)
-  }, [])
+    if (!studentId) return
+    let cancelled = false
+    apiFetch<{ data: StudentDashboardData }>(`/mahasiswa/${studentId}/dashboard`)
+      .then((res) => {
+        if (!cancelled) setData(res.data)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [studentId])
 
   if (!student) return null
 
   const firstName = student.nama.split(" ")[0]
-  const summaries = getAttendanceSummary(student.id)
+  const summaries = data?.summaries ?? []
+  const todayCourses = data?.todayCourses ?? []
+  const recentActivity = data?.recentActivity ?? []
 
   const totalSessions = summaries.reduce((acc, s) => acc + s.totalSessions, 0)
   const totalHadir = summaries.reduce((acc, s) => acc + s.hadir, 0)
@@ -85,15 +92,6 @@ export function StudentDashboardView() {
   const overallPct =
     totalSessions === 0 ? 0 : Math.round((totalHadir / totalSessions) * 100)
   const hasLowCourse = summaries.some((s) => s.isWarning)
-
-  const todayCourses = now ? getTodayCourses(now) : []
-
-  const recentActivity = attendanceRecords
-    .filter((r) => r.studentId === student.id)
-    .sort(
-      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-    )
-    .slice(0, 5)
 
   const compositionData = [
     { key: "hadir", value: totalHadir },
@@ -106,11 +104,7 @@ export function StudentDashboardView() {
     <>
       <DashboardHero
         title={`Halo, ${firstName}`}
-        description={
-          now
-            ? format(now, "EEEE, d MMMM yyyy", { locale: id })
-            : "Memuat tanggal hari ini..."
-        }
+        description={format(now, "EEEE, d MMMM yyyy", { locale: id })}
       />
 
       {loading ? (
@@ -136,7 +130,7 @@ export function StudentDashboardView() {
           />
           <StatCard
             title="Mata Kuliah Aktif"
-            value={String(student.enrolledCourseIds.length)}
+            value={String(summaries.length)}
             icon={BookOpen}
           />
         </div>
@@ -162,46 +156,32 @@ export function StudentDashboardView() {
               />
             ) : (
               <ul className="flex flex-col gap-3">
-                {todayCourses.map(({ course, session }) => {
-                  const record = attendanceRecords.find(
-                    (r) =>
-                      r.studentId === student.id &&
-                      r.courseId === course.id &&
-                      r.sessionId === session.id
-                  )
-                  return (
-                    <li
-                      key={course.id}
-                      className="flex flex-col gap-2 rounded-lg border border-border p-3 sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div className="flex flex-col gap-0.5">
-                        <p className="text-sm font-medium">{course.nama}</p>
-                        <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                          {course.jadwal.jamMulai}–{course.jadwal.jamSelesai}
-                          <span className="text-muted-foreground/50">•</span>
-                          <MapPin className="size-3" />
-                          {course.jadwal.ruang}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {session.status === "berlangsung" && (
-                          <Badge className="bg-primary/10 text-primary">
-                            Berlangsung
-                          </Badge>
-                        )}
-                        <Badge
-                          variant={
-                            record
-                              ? STATUS_BADGE_VARIANT[record.status]
-                              : "outline"
-                          }
-                        >
-                          {record ? STATUS_LABEL[record.status] : "Belum Presensi"}
+                {todayCourses.map(({ course, sesi, record }) => (
+                  <li
+                    key={course.id}
+                    className="flex flex-col gap-2 rounded-lg border border-border p-3 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="flex flex-col gap-0.5">
+                      <p className="text-sm font-medium">{course.nama}</p>
+                      <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                        {course.jadwal.jamMulai}–{course.jadwal.jamSelesai}
+                        <span className="text-muted-foreground/50">•</span>
+                        <MapPin className="size-3" />
+                        {course.jadwal.ruang}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {sesi?.presensiStatus === "dibuka" && (
+                        <Badge className="animate-pulse bg-primary/10 text-primary">
+                          🔴 Presensi Dibuka
                         </Badge>
-                      </div>
-                    </li>
-                  )
-                })}
+                      )}
+                      <Badge variant={record ? STATUS_BADGE_VARIANT[record.status] : "outline"}>
+                        {record ? STATUS_LABEL[record.status] : "Belum Presensi"}
+                      </Badge>
+                    </div>
+                  </li>
+                ))}
               </ul>
             )}
           </SectionCard>
@@ -250,7 +230,7 @@ export function StudentDashboardView() {
             description="Rekap status kehadiran sepanjang semester."
           >
             {loading ? (
-              <Skeleton className="h-[200px] rounded-lg" />
+              <Skeleton className="h-50 rounded-lg" />
             ) : compositionData.length === 0 ? (
               <EmptyState
                 title="Belum ada data presensi"
@@ -316,32 +296,27 @@ export function StudentDashboardView() {
               />
             ) : (
               <ul className="flex flex-col gap-3">
-                {recentActivity.map((record) => {
-                  const course = getCourseById(record.courseId)
-                  return (
-                    <li
-                      key={record.id}
-                      className="flex items-center gap-3 text-sm"
-                    >
-                      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                        <Fingerprint className="size-3.5" />
+                {recentActivity.map((activity) => (
+                  <li
+                    key={activity.id}
+                    className="flex items-center gap-3 text-sm"
+                  >
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <Fingerprint className="size-3.5" />
+                    </span>
+                    <div className="flex flex-1 flex-col gap-0.5">
+                      <span className="font-medium">{activity.courseNama}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {format(new Date(activity.timestamp), "d MMM, HH:mm", {
+                          locale: id,
+                        })}
                       </span>
-                      <div className="flex flex-1 flex-col gap-0.5">
-                        <span className="font-medium">
-                          {course?.nama ?? record.courseId}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {format(new Date(record.timestamp), "d MMM, HH:mm", {
-                            locale: id,
-                          })}
-                        </span>
-                      </div>
-                      <Badge variant={STATUS_BADGE_VARIANT[record.status]}>
-                        {STATUS_LABEL[record.status]}
-                      </Badge>
-                    </li>
-                  )
-                })}
+                    </div>
+                    <Badge variant={STATUS_BADGE_VARIANT[activity.status]}>
+                      {STATUS_LABEL[activity.status]}
+                    </Badge>
+                  </li>
+                ))}
               </ul>
             )}
           </SectionCard>

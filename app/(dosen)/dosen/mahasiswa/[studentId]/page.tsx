@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { format } from "date-fns"
 import { id } from "date-fns/locale"
@@ -20,7 +20,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { EnrollmentWizardModal } from "@/components/dashboard/lecturer/enrollment-wizard-modal"
+import { Skeleton } from "@/components/ui/skeleton"
+import { FingerprintEnroll } from "@/components/dashboard/lecturer/fingerprint-enroll"
 import {
   Table,
   TableBody,
@@ -29,16 +30,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { useAllStudents } from "@/lib/stores/students-store"
-import { attendanceRecords, courses, devices, getAttendanceSummary, sessions } from "@/lib/mock"
+import { apiFetch } from "@/lib/api-client"
 import {
   ATTENDANCE_STATUS_BADGE_VARIANT,
   ATTENDANCE_STATUS_LABEL,
 } from "@/lib/dashboard/attendance-status"
-
-const courseById = new Map(courses.map((c) => [c.id, c]))
-const sessionById = new Map(sessions.map((s) => [s.id, s]))
-const deviceById = new Map(devices.map((d) => [d.id, d]))
+import type { AttendanceRecord, AttendanceSummary, Student } from "@/lib/types"
 
 function initials(nama: string): string {
   return nama
@@ -52,36 +49,44 @@ function initials(nama: string): string {
 export default function MahasiswaProfilePage() {
   const params = useParams<{ studentId: string }>()
   const router = useRouter()
-  const students = useAllStudents()
 
-  const student = students.find((s) => s.id === params.studentId) ?? null
+  const [loading, setLoading] = useState(true)
+  const [student, setStudent] = useState<Student | null>(null)
+  const [summaries, setSummaries] = useState<AttendanceSummary[]>([])
+  const [history, setHistory] = useState<AttendanceRecord[]>([])
+  const [commandId, setCommandId] = useState<string | null>(null)
+  const [fingerprintDone, setFingerprintDone] = useState(false)
 
-  const summaries = useMemo(
-    () => (student ? getAttendanceSummary(student.id) : []),
-    [student]
-  )
+  useEffect(() => {
+    Promise.all([
+      apiFetch<{ data: Student }>(`/mahasiswa/${params.studentId}`).catch(() => null),
+      apiFetch<{ data: AttendanceSummary[] }>(`/mahasiswa/${params.studentId}/presensi-summary`).catch(() => ({
+        data: [],
+      })),
+      apiFetch<{ data: AttendanceRecord[] }>(`/mahasiswa/${params.studentId}/presensi`).catch(() => ({ data: [] })),
+    ]).then(([studentRes, summariesRes, historyRes]) => {
+      setStudent(studentRes?.data ?? null)
+      setSummaries(summariesRes.data)
+      setHistory(historyRes.data.slice(0, 30))
+      setLoading(false)
+    })
+  }, [params.studentId])
 
-  const history = useMemo(() => {
-    if (!student) return []
-    return attendanceRecords
-      .filter((r) => r.studentId === student.id)
-      .map((r) => {
-        const session = sessionById.get(r.sessionId)
-        const course = courseById.get(r.courseId)
-        return {
-          key: r.id,
-          tanggal: session?.tanggal ?? "",
-          pertemuanKe: session?.pertemuanKe ?? 0,
-          courseNama: course?.nama ?? "-",
-          status: r.status,
-          waktu: format(new Date(r.timestamp), "HH:mm"),
-          method: r.method,
-          deviceNama: deviceById.get(r.deviceId)?.nama ?? "-",
-        }
-      })
-      .sort((a, b) => b.tanggal.localeCompare(a.tanggal))
-      .slice(0, 30)
-  }, [student])
+  async function handleStartEnroll() {
+    const res = await apiFetch<{ commandId: string }>(`/mahasiswa/${params.studentId}/enroll`, {
+      method: "POST",
+    })
+    setCommandId(res.commandId)
+  }
+
+  if (loading) {
+    return (
+      <>
+        <PageHeader title="Mahasiswa" />
+        <Skeleton className="h-64 rounded-xl" />
+      </>
+    )
+  }
 
   if (!student) {
     return (
@@ -99,11 +104,13 @@ export default function MahasiswaProfilePage() {
         <EmptyState
           icon={Users}
           title="Mahasiswa tidak ditemukan"
-          description="Data mahasiswa mungkin belum tersedia atau dihapus dari sesi mock saat ini."
+          description="Data mahasiswa tidak tersedia atau sudah dihapus."
         />
       </>
     )
   }
+
+  const isFingerprintEnrolled = fingerprintDone || student.fingerprintEnrolled
 
   return (
     <>
@@ -129,18 +136,23 @@ export default function MahasiswaProfilePage() {
               <p className="font-display text-lg font-semibold">{student.nama}</p>
               <p className="text-sm text-muted-foreground">{student.nim}</p>
             </div>
-            {student.fingerprintEnrolled ? (
+            {isFingerprintEnrolled ? (
               <Badge variant="success">
                 <Fingerprint />
                 Sidik jari terdaftar
               </Badge>
             ) : (
-              <div className="flex flex-col items-center gap-1.5 w-full">
+              <div className="flex w-full flex-col items-center gap-1.5">
                 <Badge variant="outline" className="w-fit">
                   <ShieldAlert />
                   Sidik jari belum terdaftar
                 </Badge>
-                <EnrollmentWizardModal studentId={student.id} studentNama={student.nama} />
+                <FingerprintEnroll
+                  onEnrolled={() => setFingerprintDone(true)}
+                  commandId={commandId}
+                  onStartEnroll={handleStartEnroll}
+                  className="w-full"
+                />
               </div>
             )}
 
@@ -211,18 +223,17 @@ export default function MahasiswaProfilePage() {
                 <TableHead>Ke-</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Metode</TableHead>
-                <TableHead>Device</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {history.map((row) => (
-                <TableRow key={row.key}>
+                <TableRow key={row.id}>
                   <TableCell>
-                    {row.tanggal
-                      ? format(new Date(row.tanggal), "d MMM yyyy", { locale: id })
-                      : "-"}
+                    {format(new Date(row.timestamp), "d MMM yyyy", { locale: id })}
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{row.waktu}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {format(new Date(row.timestamp), "HH:mm")}
+                  </TableCell>
                   <TableCell className="text-muted-foreground">{row.courseNama}</TableCell>
                   <TableCell className="text-muted-foreground">{row.pertemuanKe || "-"}</TableCell>
                   <TableCell>
@@ -240,7 +251,6 @@ export default function MahasiswaProfilePage() {
                       {row.method === "fingerprint" ? "Fingerprint" : "Manual"}
                     </span>
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{row.deviceNama}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
