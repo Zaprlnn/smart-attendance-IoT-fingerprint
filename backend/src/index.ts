@@ -8,7 +8,7 @@ import cors from "cors"
 dns.setDefaultResultOrder("ipv4first")
 
 import { authRouter } from "./routes/auth.js"
-import { deviceRouter } from "./routes/device.js"
+import { deviceRouter, loadFingerCache } from "./routes/device.js"
 import { mataKuliahRouter } from "./routes/mata-kuliah.js"
 import { mahasiswaRouter } from "./routes/mahasiswa.js"
 import { dosenRouter } from "./routes/dosen.js"
@@ -29,6 +29,8 @@ app.use("/dosen", dosenRouter)
 app.use("/presensi", presensiRouter)
 
 const port = Number(process.env.PORT ?? 4000)
-app.listen(port, () => {
-  console.log(`Backend listening on http://localhost:${port}`)
+loadFingerCache().finally(() => {
+  app.listen(port, () => {
+    console.log(`Backend listening on http://localhost:${port}`)
+  })
 })

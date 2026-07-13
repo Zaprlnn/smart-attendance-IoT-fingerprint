@@ -4,6 +4,24 @@ import { requireDeviceKey } from "../lib/auth.js"
 
 export const deviceRouter = Router()
 
+// Cache in-memory id_jari -> {mahasiswaId, nama}, biar respons ke ESP32 gak
+// perlu nunggu round-trip ke Supabase (jaringan lambat, ~1-1.2s/query). Data
+// mahasiswa cuma berubah pas enroll (jarang), jadi cache ini di-refresh di
+// tempat itu aja, bukan tiap request.
+const fingerCache = new Map<number, { mahasiswaId: string; nama: string }>()
+
+export async function loadFingerCache() {
+  const rows = await prisma.mahasiswa.findMany({
+    where: { id_jari: { not: null } },
+    select: { id: true, id_jari: true, nama: true },
+  })
+  fingerCache.clear()
+  for (const r of rows) {
+    if (r.id_jari != null) fingerCache.set(r.id_jari, { mahasiswaId: r.id, nama: r.nama })
+  }
+  console.log(`[fingerCache] dimuat ${fingerCache.size} mahasiswa`)
+}
+
 /**
  * Presensi mandiri: dosen membuka window presensi (presensi_mulai/presensi_selesai)
  * per pertemuan dari halaman mata kuliahnya. Kalau mahasiswa yang absen ini enroll
@@ -65,34 +83,28 @@ deviceRouter.post("/absensi", requireDeviceKey, async (req, res) => {
   const deviceKey = (req.headers["x-device-key"] as string) ?? null
   const namaFallback = typeof nama === "string" && nama.trim() ? nama.trim() : null
 
-  // Lookup mahasiswa + insert absensi digabung jadi 1 round-trip DB (bukan 2
-  // query berurutan) -- tiap round-trip ke Supabase pooler makan ~1.1-1.2s
-  // di jaringan lambat, jadi ini motong latency respons ESP32 hampir setengah.
-  const [row] = await prisma.$queryRaw<
-    { id: bigint; waktu: Date; mahasiswa_id: string | null; mhs_nama: string | null }[]
-  >`
-    WITH mhs AS (
-      SELECT id, nama FROM mahasiswa WHERE id_jari = ${id_jari} LIMIT 1
-    )
-    INSERT INTO absensi (id_jari, nama, status, waktu)
-    SELECT ${id_jari}, COALESCE((SELECT nama FROM mhs), ${namaFallback}, 'ID Jari #' || ${id_jari}::text), ${statusValue}, now()
-    RETURNING id, waktu, (SELECT id FROM mhs) AS mahasiswa_id, (SELECT nama FROM mhs) AS mhs_nama
-  `
-  const finalNama = row.mhs_nama ?? namaFallback ?? `ID Jari #${id_jari}`
+  const cached = fingerCache.get(id_jari)
+  const finalNama = cached?.nama ?? namaFallback ?? `ID Jari #${id_jari}`
+  const waktu = new Date()
 
-  // ESP32 cuma butuh nama utk LCD -- jangan bikin dia nunggu bookkeeping
-  // (upsert presensi + heartbeat) yang tidak memengaruhi response ini.
-  Promise.all([
-    row.mahasiswa_id ? upsertPresensiJikaAdaSesiBerjalan(row.mahasiswa_id, deviceKey) : Promise.resolve(),
-    bumpDeviceHeartbeat(deviceKey, true),
-  ]).catch((err) => console.error("[/device/absensi] background bookkeeping gagal:", err))
+  // Jawab ESP32 dari cache in-memory dulu (instan, 0 round-trip ke Supabase --
+  // ESP32 cuma baca field "nama" dari respons ini, gak baca data.id/waktu).
+  // Insert absensi + bookkeeping beneran jalan setelahnya di background.
+  // ponytail: kalau proses crash persis di antara respons ini & insert
+  // selesai, 1 scan itu bisa gak kesimpan. Upgrade path kalau itu jadi
+  // masalah nyata: tulis ke antrian lokal dulu (mis. SQLite) sebelum respons.
+  res.json({ ok: true, data: { id: 0, waktu }, nama: finalNama })
 
-  console.log(`[/device/absensi] INSERT OK — id_jari=${id_jari} nama="${finalNama}"`)
-  return res.json({
-    ok: true,
-    data: { id: Number(row.id), waktu: row.waktu },
-    nama: finalNama,
-  })
+  prisma.absensi
+    .create({ data: { id_jari, nama: finalNama, status: statusValue, waktu } })
+    .then(() => {
+      console.log(`[/device/absensi] INSERT OK — id_jari=${id_jari} nama="${finalNama}"`)
+      return Promise.all([
+        cached ? upsertPresensiJikaAdaSesiBerjalan(cached.mahasiswaId, deviceKey) : Promise.resolve(),
+        bumpDeviceHeartbeat(deviceKey, true),
+      ])
+    })
+    .catch((err) => console.error("[/device/absensi] background insert/bookkeeping gagal:", err))
 })
 
 deviceRouter.get("/absensi", (_req, res) => {
@@ -140,10 +152,11 @@ deviceRouter.post("/command", requireDeviceKey, async (req, res) => {
 
     const cmdPayload = cmd?.payload as { mahasiswa_id?: string } | null
     if (status === "completed" && payload?.id_jari && cmdPayload?.mahasiswa_id) {
-      await prisma.mahasiswa.update({
+      const mhs = await prisma.mahasiswa.update({
         where: { id: cmdPayload.mahasiswa_id },
         data: { id_jari: payload.id_jari, fingerprint_enrolled: true },
       })
+      fingerCache.set(payload.id_jari, { mahasiswaId: mhs.id, nama: mhs.nama })
     }
 
     return res.json({ ok: true })
