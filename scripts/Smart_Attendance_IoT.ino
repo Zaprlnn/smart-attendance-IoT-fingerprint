@@ -28,6 +28,8 @@
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 #include <Adafruit_Fingerprint.h>
+#include "esp_system.h"
+#include "esp_task_wdt.h"
 
 // ====== KONFIGURASI WIFI & SERVER ======
 #include <WiFi.h>
@@ -200,9 +202,13 @@ String kirimAbsensi(uint8_t id_jari, String nama_fallback) {
   }
   
   String namaDariServer = nama_fallback;
-  
-  // Minta izin ke Mutex agar tidak tabrakan dengan Task Polling
-  if (xSemaphoreTake(httpMutex, portMAX_DELAY)) {
+
+  // Minta izin ke Mutex agar tidak tabrakan dengan Task Polling -- dibatasi 3 detik
+  // (bukan portMAX_DELAY/nunggu selamanya). TaskPollServer bisa pegang mutex ini
+  // sampai 5 detik (timeout HTTP-nya sendiri); kalau jari discan pas momen itu dan
+  // loop() ikut nunggu tanpa batas + ditambah POST absensi sendiri, total blocking
+  // di 1 iterasi loop() gampang kelewat task watchdog ESP32 -> device reboot sendiri.
+  if (xSemaphoreTake(httpMutex, pdMS_TO_TICKS(3000))) {
     Serial.println("[HTTP] Mengirim data absensi ke server...");
   // Server sekarang akan mengabaikan field "nama" dan mengambil dari database
   String jsonBody = "{\"id_jari\":" + String(id_jari) + ",\"nama\":\"" + nama_fallback + "\",\"status\":\"hadir\"}";
@@ -255,22 +261,29 @@ String taskCmdId = "";
 // ====== Fungsi Report Hasil Pendaftaran ======
 void laporHasilEnroll(String cmd_id, uint8_t id_jari, bool sukses) {
   if (WiFi.status() != WL_CONNECTED) return;
-  
-  if (xSemaphoreTake(httpMutex, portMAX_DELAY)) {
+
+  // Mutex dibatasi 3 detik (bukan portMAX_DELAY) -- alasan sama seperti kirimAbsensi().
+  if (xSemaphoreTake(httpMutex, pdMS_TO_TICKS(3000))) {
     HTTPClient http;
     String url = String(SERVER_URL);
     url.replace("absensi", "device/command"); // Pakai rute command
     http.begin(url);
     http.addHeader("Content-Type", "application/json");
     http.addHeader("x-device-key", DEVICE_KEY);
-    
+    http.setTimeout(3000); // Batasi tiap percobaan (default HTTPClient ~5 detik/percobaan
+                            // -- 3x retry tanpa batas ini bisa numpuk >15 detik dalam 1
+                            // panggilan loop() dan kena task watchdog ESP32 -> reboot).
+
     String statusCmd = sukses ? "completed" : "failed";
     String jsonBody = "{\"command_id\":\"" + cmd_id + "\",\"status\":\"" + statusCmd + "\",\"payload\":{\"id_jari\":" + String(id_jari) + "}}";
 
     // Retry -- kalau ini gagal sekali aja, sensor fisik udah kesimpen sidik
     // jarinya tapi DB gak pernah tau (mismatch permanen sampai di-enroll ulang).
+    // esp_task_wdt_reset() dipanggil tiap percobaan supaya rangkaian retry yang
+    // legitimately lama ini gak disalahartikan watchdog sebagai loop() macet.
     int httpCode = -1;
     for (int attempt = 0; attempt < 3 && httpCode != 200; attempt++) {
+      esp_task_wdt_reset();
       if (attempt > 0) delay(1000);
       httpCode = http.POST(jsonBody);
     }
@@ -307,6 +320,7 @@ bool daftarSidikJari(uint8_t id) {
   lcdMsg(" Tempel  Jari.. ", " Scan ke-1      ");
   Serial.println("Tempel jari (scan 1)...");
   while (p != FINGERPRINT_OK) {
+    esp_task_wdt_reset(); // nunggu user nempel jari itu legit lama (manusia, bukan macet)
     p = finger.getImage();
     if (p == FINGERPRINT_NOFINGER) continue;
     if (p != FINGERPRINT_OK) {
@@ -324,13 +338,14 @@ bool daftarSidikJari(uint8_t id) {
   beepBlocking(1);
   delay(1500);
 
-  while (finger.getImage() != FINGERPRINT_NOFINGER);
+  while (finger.getImage() != FINGERPRINT_NOFINGER) esp_task_wdt_reset();
 
   // === SCAN KEDUA ===
   lcdMsg(" Tempel  Lagi.. ", " Scan ke-2      ");
   Serial.println("Tempel jari lagi (scan 2)...");
   p = -1;
   while (p != FINGERPRINT_OK) {
+    esp_task_wdt_reset();
     p = finger.getImage();
     if (p == FINGERPRINT_NOFINGER) continue;
     if (p != FINGERPRINT_OK) {
@@ -470,10 +485,27 @@ void cekSerialCommand() {
   }
 }
 
+// Cetak alasan reboot terakhir -- biar kalau device ke-reset sendiri (brownout
+// karena tegangan drop, atau task watchdog karena loop macet), penyebabnya
+// kelihatan langsung di Serial Monitor, gak perlu nebak-nebak lagi.
+void cetakAlasanReboot() {
+  Serial.print(">> Alasan boot/reboot terakhir: ");
+  switch (esp_reset_reason()) {
+    case ESP_RST_POWERON:  Serial.println("Power-on normal"); break;
+    case ESP_RST_BROWNOUT: Serial.println("BROWNOUT! Tegangan drop -- cek power supply/kapasitor"); break;
+    case ESP_RST_TASK_WDT: Serial.println("TASK WATCHDOG! Ada bagian loop() yang macet/blocking kelamaan"); break;
+    case ESP_RST_INT_WDT:  Serial.println("INTERRUPT WATCHDOG"); break;
+    case ESP_RST_PANIC:    Serial.println("PANIC/crash software"); break;
+    case ESP_RST_SW:       Serial.println("Software reset (ESP.restart())"); break;
+    default:               Serial.println((int)esp_reset_reason()); break;
+  }
+}
+
 // ====== Setup ======
 void setup() {
   Serial.begin(115200);
   delay(300);
+  cetakAlasanReboot();
 
   // Inisialisasi Mutex HTTP
   httpMutex = xSemaphoreCreateMutex();
@@ -628,13 +660,17 @@ void loop() {
       // ==== BERHASIL DETEKSI ====
       Serial.print("Terdeteksi ID: "); Serial.println(hasil);
       state  = SUKSES;
-      tState = millis();
       digitalWrite(LED_BIRU, HIGH);
       digitalWrite(LED_MERAH, LOW);
-      
+
       lcdMsg("  Memproses...  ", "                ");
       String namaReal = kirimAbsensi(hasil, getNama(hasil)); // Ambil nama asli dari server
 
+      // tState baru dimulai di sini (bukan sebelum kirimAbsensi) -- kirimAbsensi()
+      // itu HTTP blocking yang bisa makan 1-3 detik, kalau timer DURASI_NOTIF (1 detik)
+      // sudah mulai duluan, jatahnya abis duluan sebelum nama sempat kebaca di LCD
+      // dan langsung ke-clear balik ke standby.
+      tState = millis();
       tampilSukses(namaReal); // <---- Tampil LCD dengan nama asli
       mulaiBeep(2);
 
