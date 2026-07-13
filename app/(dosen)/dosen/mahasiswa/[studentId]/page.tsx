@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { format } from "date-fns"
 import { id } from "date-fns/locale"
+import { toast } from "sonner"
 import {
   ArrowLeft,
   Fingerprint,
@@ -73,10 +74,16 @@ export default function MahasiswaProfilePage() {
   }, [params.studentId])
 
   async function handleStartEnroll() {
-    const res = await apiFetch<{ commandId: string }>(`/mahasiswa/${params.studentId}/enroll`, {
-      method: "POST",
-    })
-    setCommandId(res.commandId)
+    try {
+      const res = await apiFetch<{ commandId: string }>(`/mahasiswa/${params.studentId}/enroll`, {
+        method: "POST",
+      })
+      setCommandId(res.commandId)
+    } catch (err) {
+      toast.error("Gagal memulai enroll sidik jari", {
+        description: err instanceof Error ? err.message : "Terjadi kesalahan tak terduga.",
+      })
+    }
   }
 
   if (loading) {
