@@ -73,7 +73,7 @@ String getNama(uint8_t id) {
 enum State { IDLE, SUKSES, GAGAL };
 State state = IDLE;
 unsigned long tState = 0;
-const unsigned long DURASI_NOTIF = 2500;
+const unsigned long DURASI_NOTIF = 1000;
 
 // ====== Status Saklar ======
 bool isSystemOn = true; 
