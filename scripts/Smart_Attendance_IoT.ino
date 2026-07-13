@@ -33,9 +33,9 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 
-const char* WIFI_SSID     = "Al";       
-const char* WIFI_PASSWORD = "12345678";   
-const char* SERVER_URL    = "http://172.20.10.2:3000/api/absensi"; 
+const char* WIFI_SSID     = "Kuning Telur 4G";
+const char* WIFI_PASSWORD = "KuningTelur2026";
+const char* SERVER_URL    = "http://192.168.1.7:3000/api/absensi";
 const char* DEVICE_KEY    = "smart-attendance-iot-key"; 
 // =======================================
 
@@ -173,6 +173,8 @@ void connectWiFi() {
   // -----------------------
 
   Serial.println("\n>> WiFi Terhubung!");
+  Serial.print(">> IP ESP32: "); Serial.println(WiFi.localIP());
+  Serial.print(">> Gateway : "); Serial.println(WiFi.gatewayIP());
   lcdMsg("  WiFi  OK!     ", "                ");
   delay(1000);
 }
@@ -394,7 +396,7 @@ void TaskPollServer(void *pvParameters) {
         
         http.begin(url);
         http.addHeader("x-device-key", DEVICE_KEY);
-        http.setTimeout(2000); // Batasi timeout 2 detik agar tidak hang
+        http.setTimeout(5000); // Kasih headroom lebih -- query backend ~1-1.2s, +jaringan bisa lebih
         
         int httpCode = http.GET();
         if (httpCode == 200) {

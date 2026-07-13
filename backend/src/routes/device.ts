@@ -116,21 +116,30 @@ deviceRouter.get("/absensi", (_req, res) => {
 deviceRouter.get("/command", requireDeviceKey, async (req, res) => {
   const deviceKey = req.headers["x-device-key"] as string
 
-  await bumpDeviceHeartbeat(deviceKey, false)
+  // Cari + klaim command pending tertua jadi 1 query atomik (bukan findFirst
+  // lalu update terpisah) -- ESP32 punya timeout 2s buat polling ini, 2 query
+  // berurutan (~2.2-2.4s) sering telat sehingga command "hilang" (status
+  // kelanjur processing tapi ESP32 gak sempat baca respons). Heartbeat gak
+  // perlu ditunggu, jalan di background.
+  bumpDeviceHeartbeat(deviceKey, false).catch((err) => console.error("[/device/command] heartbeat gagal:", err))
 
-  const cmd = await prisma.device_commands.findFirst({
-    where: { device_id: deviceKey, status: "pending" },
-    orderBy: { created_at: "asc" },
-  })
+  const [cmd] = await prisma.$queryRaw<
+    { id: string; command: string; payload: unknown }[]
+  >`
+    UPDATE device_commands
+    SET status = 'processing', updated_at = now()
+    WHERE id = (
+      SELECT id FROM device_commands
+      WHERE device_id = ${deviceKey} AND status = 'pending'
+      ORDER BY created_at ASC
+      LIMIT 1
+    )
+    RETURNING id, command, payload
+  `
 
   if (!cmd) {
     return res.json({ ok: true, command: null })
   }
-
-  await prisma.device_commands.update({
-    where: { id: cmd.id },
-    data: { status: "processing", updated_at: new Date() },
-  })
 
   return res.json({ ok: true, command: cmd.command, payload: cmd.payload, command_id: cmd.id })
 })
