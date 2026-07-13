@@ -58,11 +58,17 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: "smart-attendance-auth",
-      // Naikkan version ini kalau bentuk AuthState berubah lagi — localStorage
-      // lama dg version berbeda otomatis dibuang (bukan dipaksa cocok), user
-      // tinggal login ulang. Ditambahkan krn migrasi backend Supabase->Prisma
-      // mengubah bentuk state ini (nambah token JWT).
+      // Naikkan version ini kalau bentuk AuthState berubah lagi. migrate wajib
+      // ada agar localStorage versi lama dibuang bersih (bukan cuma warning
+      // di console) -- state lama gak punya token JWT dari migrasi backend
+      // Supabase->Prisma, jadi paksa logout drpd dipakai apa adanya.
       version: 1,
+      migrate: () => ({
+        currentUser: null,
+        role: null,
+        token: null,
+        isAuthenticated: false,
+      }),
       partialize: (state) => ({
         currentUser: state.currentUser,
         role: state.role,

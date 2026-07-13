@@ -1,6 +1,11 @@
 import "dotenv/config"
+import dns from "node:dns"
 import express from "express"
 import cors from "cors"
+
+// Supabase pooler kadang resolve ke IPv6 dulu lalu timeout sebelum fallback ke
+// IPv4, nambah ~1-2s di TIAP koneksi baru ke DB (lebih kerasa di Windows).
+dns.setDefaultResultOrder("ipv4first")
 
 import { authRouter } from "./routes/auth.js"
 import { deviceRouter } from "./routes/device.js"
