@@ -1,5 +1,6 @@
 import { Router } from "express"
 import bcrypt from "bcryptjs"
+import { Prisma } from "@prisma/client"
 import { prisma } from "../lib/prisma.js"
 import { requireAuth } from "../lib/auth.js"
 import { serializeMahasiswa, serializeMataKuliah } from "../lib/serializers.js"
@@ -60,9 +61,17 @@ mahasiswaRouter.post("/", requireAuth("lecturer"), async (req, res) => {
   }
 
   const password_hash = await bcrypt.hash(String(nama).toLowerCase().replace(/\s+/g, ""), 10)
-  const mhs = await prisma.mahasiswa.create({
-    data: { nama, nim, prodi, semester: Number(semester), email, password_hash, fingerprint_enrolled: false },
-  })
+  let mhs
+  try {
+    mhs = await prisma.mahasiswa.create({
+      data: { nama, nim, prodi, semester: Number(semester), email, password_hash, fingerprint_enrolled: false },
+    })
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      return res.status(409).json({ ok: false, error: "NIM atau email sudah terdaftar" })
+    }
+    throw err
+  }
 
   const deviceId = process.env.DEVICE_KEY!
   const idJari = Math.floor(Math.random() * 127) + 1

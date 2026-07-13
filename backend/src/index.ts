@@ -7,6 +7,15 @@ import cors from "cors"
 // IPv4, nambah ~1-2s di TIAP koneksi baru ke DB (lebih kerasa di Windows).
 dns.setDefaultResultOrder("ipv4first")
 
+// Express 4 gak nangkep rejection dari async route handler otomatis -- kalau
+// gak ditangani di sini, 1 error di route manapun (mis. unique constraint
+// Prisma) bikin SELURUH proses Node mati, matiin server buat semua orang
+// (termasuk ESP32 yang lagi jalan). Ini jaring pengaman terakhir; route yang
+// errornya diketahui tetap sebaiknya tangkep sendiri & balas response yang jelas.
+process.on("unhandledRejection", (reason) => {
+  console.error("[unhandledRejection] Route error tertangkap, server tetap jalan:", reason)
+})
+
 import { authRouter } from "./routes/auth.js"
 import { deviceRouter, loadFingerCache } from "./routes/device.js"
 import { mataKuliahRouter } from "./routes/mata-kuliah.js"
