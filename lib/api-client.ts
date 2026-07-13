@@ -2,10 +2,8 @@
 
 import { useAuthStore } from "@/lib/stores/auth-store"
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000"
-
 /**
- * Fetch wrapper ke backend/ (Express+Prisma) — otomatis attach JWT dari auth-store.
+ * Fetch wrapper ke app/api/* (Next.js Route Handlers) — otomatis attach JWT dari auth-store.
  * Mengembalikan body JSON penuh (`{ ok, data, ... }`) apa adanya — caller yang
  * mengambil `.data` sendiri, supaya field lain di luar `data` (mis. `commandId`)
  * tidak hilang oleh unwrap otomatis.
@@ -13,7 +11,7 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:400
 export async function apiFetch<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {
   const token = useAuthStore.getState().token
 
-  const res = await fetch(`${BACKEND_URL}${path}`, {
+  const res = await fetch(`/api${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",

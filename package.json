@@ -3,22 +3,26 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently -n frontend,backend -c blue,green \"npm:dev:frontend\" \"npm:dev:backend\"",
-    "dev:frontend": "cross-env NODE_NO_WARNINGS=1 next dev",
-    "dev:backend": "cd backend && npm run dev",
+    "postinstall": "prisma generate",
+    "dev": "cross-env NODE_NO_WARNINGS=1 next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "prisma:seed": "tsx prisma/seed.ts",
+    "reset:mahasiswa": "tsx scripts/reset-mahasiswa.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
+    "@prisma/client": "^6.3.1",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "2.110.0",
+    "bcryptjs": "^2.4.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^4.4.0",
     "exceljs": "^4.4.0",
+    "jsonwebtoken": "^9.0.2",
     "lucide-react": "^1.21.0",
     "next": "16.2.9",
     "next-themes": "^0.4.6",
@@ -35,15 +39,19 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^20",
     "@types/p5": "^1.7.7",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "concurrently": "^10.0.3",
     "cross-env": "^10.1.0",
+    "dotenv": "^16.4.7",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
+    "prisma": "^6.3.1",
     "tailwindcss": "^4",
+    "tsx": "^4.19.2",
     "typescript": "^5"
   }
 }

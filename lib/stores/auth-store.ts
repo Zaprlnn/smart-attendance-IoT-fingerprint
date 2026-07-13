@@ -4,8 +4,6 @@ import { create } from "zustand"
 import { persist } from "zustand/middleware"
 import type { Lecturer, Student, UserRole } from "@/lib/types"
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000"
-
 type CurrentUser = Student | Lecturer
 
 interface LoginResult {
@@ -33,7 +31,7 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       hasHydrated: false,
       login: async (role, identifier, password) => {
-        const res = await fetch(`${BACKEND_URL}/auth/login`, {
+        const res = await fetch(`/api/auth/login`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
