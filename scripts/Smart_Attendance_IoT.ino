@@ -422,8 +422,11 @@ void TaskPollServer(void *pvParameters) {
         xSemaphoreGive(httpMutex);
       }
     }
-    // Jeda 3 detik sebelum cek lagi (wajib ada vTaskDelay agar RTOS tidak crash)
-    vTaskDelay(3000 / portTICK_PERIOD_MS); 
+    // Jeda 1 detik sebelum cek lagi (wajib ada vTaskDelay agar RTOS tidak crash)
+    // Catatan: ini cuma mempercepat DETEKSI perintah "daftar sidik jari" dari
+    // dashboard, tidak memengaruhi kecepatan kirim absensi (kirimAbsensi()
+    // dipanggil langsung saat jari terdeteksi, tidak lewat loop polling ini).
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 }
 

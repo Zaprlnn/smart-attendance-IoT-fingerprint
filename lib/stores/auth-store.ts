@@ -58,6 +58,11 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: "smart-attendance-auth",
+      // Naikkan version ini kalau bentuk AuthState berubah lagi — localStorage
+      // lama dg version berbeda otomatis dibuang (bukan dipaksa cocok), user
+      // tinggal login ulang. Ditambahkan krn migrasi backend Supabase->Prisma
+      // mengubah bentuk state ini (nambah token JWT).
+      version: 1,
       partialize: (state) => ({
         currentUser: state.currentUser,
         role: state.role,

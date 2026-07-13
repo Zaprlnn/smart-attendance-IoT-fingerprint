@@ -67,15 +67,14 @@ deviceRouter.post("/absensi", requireDeviceKey, async (req, res) => {
   const mhs = await prisma.mahasiswa.findFirst({ where: { id_jari } })
   const finalNama = mhs?.nama || (typeof nama === "string" && nama.trim()) || `ID Jari #${id_jari}`
 
-  const row = await prisma.absensi.create({
-    data: { id_jari, nama: finalNama, status: statusValue, waktu: new Date() },
-    select: { id: true, waktu: true },
-  })
-
-  if (mhs) {
-    await upsertPresensiJikaAdaSesiBerjalan(mhs.id, deviceKey)
-  }
-  await bumpDeviceHeartbeat(deviceKey, true)
+  const [row] = await Promise.all([
+    prisma.absensi.create({
+      data: { id_jari, nama: finalNama, status: statusValue, waktu: new Date() },
+      select: { id: true, waktu: true },
+    }),
+    mhs ? upsertPresensiJikaAdaSesiBerjalan(mhs.id, deviceKey) : Promise.resolve(),
+    bumpDeviceHeartbeat(deviceKey, true),
+  ])
 
   console.log(`[/device/absensi] INSERT OK — id_jari=${id_jari} nama="${finalNama}"`)
   return res.json({
