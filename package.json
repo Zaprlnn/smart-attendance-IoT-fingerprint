@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "cross-env NODE_NO_WARNINGS=1 next dev",
+    "postinstall": "npm --prefix backend install",
+    "dev": "concurrently -n frontend,backend -c blue,green \"npm:dev:frontend\" \"npm:dev:backend\"",
+    "dev:frontend": "cross-env NODE_NO_WARNINGS=1 next dev",
+    "dev:backend": "npm --prefix backend run dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
@@ -37,6 +40,7 @@
     "@types/p5": "^1.7.7",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^10.0.3",
     "cross-env": "^10.1.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
