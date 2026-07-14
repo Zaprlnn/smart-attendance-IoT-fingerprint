@@ -39,28 +39,28 @@ function AbsensiRowItem({ row, isNew }: { row: AbsensiRow; isNew: boolean }) {
   return (
     <div
       className={cn(
-        "grid grid-cols-[2rem_1fr_auto_auto] items-center gap-3 rounded-xl border border-border px-4 py-3 transition-all duration-500",
+        "flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-border px-4 py-3 transition-all duration-500",
         isNew && "animate-in slide-in-from-top-2 fade-in-0 border-primary/40 bg-primary/5"
       )}
     >
       {/* Icon jari */}
-      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
         <Fingerprint className="h-4 w-4 text-muted-foreground" />
       </div>
 
       {/* Nama */}
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="truncate font-medium leading-tight">{row.nama}</p>
         <p className="text-xs text-muted-foreground">{row.nim ?? `ID Jari #${row.id_jari}`}</p>
       </div>
 
-      {/* Status */}
-      <StatusBadge status={row.status} />
-
-      {/* Waktu */}
-      <span className="whitespace-nowrap text-right text-xs tabular-nums text-muted-foreground">
-        {formatWaktuWIB(row.waktu)}
-      </span>
+      {/* Status + waktu */}
+      <div className="ml-auto flex items-center gap-2">
+        <StatusBadge status={row.status} />
+        <span className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+          {formatWaktuWIB(row.waktu)}
+        </span>
+      </div>
     </div>
   )
 }
